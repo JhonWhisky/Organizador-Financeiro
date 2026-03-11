@@ -1,58 +1,37 @@
-import React, { useState, useContext } from "react"; // Adicionar useContext
-import { FinanceContext } from "../../context/FinanceContext"; // Importar contexto
+import React, { useState, useContext } from 'react';
+import { FinanceContext } from '../../context/FinanceContext';
+import api from '../../services/api';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Button,
-  IconButton,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-  Box,
-  Chip,
-} from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+  Button, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Box, Chip,
+  FormControl, InputLabel, Select, MenuItem, Grid
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+
+const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 
 export default function AssinaturasList() {
-  const { assinaturas, setAssinaturas } = useContext(FinanceContext);
-  // Estado inicial com dados mockados
-  //   const [assinaturas, setAssinaturas] = useState([
-  //     { id: 1, nome: 'Netflix', fatura: 'Cartão Nubank', responsavel: 'João', valor: 39.90 },
-  //     { id: 2, nome: 'Spotify', fatura: 'Cartão Inter', responsavel: 'Maria', valor: 21.90 }
-  //   ]);
+  const { assinaturas, setAssinaturas, responsaveis, faturas } = useContext(FinanceContext);
 
   const [open, setOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    id: null,
-    nome: "",
-    fatura: "",
-    responsavel: "",
-    valor: "",
-    diaCobranca: "",
-  });
+  const [formData, setFormData] = useState({ id: null, nome: '', faturaId: '', responsavelId: '', valor: '', diaCobranca: '' });
 
   const handleOpen = (assinatura = null) => {
     if (assinatura) {
-      setFormData({ ...assinatura });
+      const respEncontrado = responsaveis.find(r => r.nome === assinatura.responsavel);
+      const faturaEncontrada = faturas.find(f => f.nome === assinatura.fatura);
+      
+      setFormData({ 
+        id: assinatura.id, nome: assinatura.nome, valor: assinatura.valor, diaCobranca: assinatura.diaCobranca,
+        responsavelId: respEncontrado ? respEncontrado.id : '',
+        faturaId: faturaEncontrada ? faturaEncontrada.id : ''
+      });
       setIsEditing(true);
     } else {
-      setFormData({
-        id: null,
-        nome: "",
-        fatura: "",
-        responsavel: "",
-        valor: "",
-      });
+      setFormData({ id: null, nome: '', faturaId: '', responsavelId: '', valor: '', diaCobranca: '' });
       setIsEditing(false);
     }
     setOpen(true);
@@ -60,178 +39,139 @@ export default function AssinaturasList() {
 
   const handleClose = () => setOpen(false);
 
-  const handleSave = () => {
-    if (isEditing) {
-      setAssinaturas(
-        assinaturas.map((a) =>
-          a.id === formData.id
-            ? { ...formData, valor: parseFloat(formData.valor) }
-            : a,
-        ),
-      );
-    } else {
-      const novaAssinatura = {
-        ...formData,
-        id: Date.now(),
-        valor: parseFloat(formData.valor),
-      };
-      setAssinaturas([...assinaturas, novaAssinatura]);
-    }
-    handleClose();
+  const recarregarAssinaturas = async () => {
+    const res = await api.get('/assinaturas');
+    setAssinaturas(res.data.map(ass => ({
+      ...ass, 
+      responsavel: ass.responsavel ? ass.responsavel.nome : 'Não Informado',
+      fatura: ass.fatura ? ass.fatura.nome : 'Não Informada'
+    })));
   };
 
-  const handleDelete = (id) => {
-    setAssinaturas(assinaturas.filter((a) => a.id !== id));
+  const handleSave = async () => {
+    const payload = { ...formData, valor: parseFloat(formData.valor), diaCobranca: parseInt(formData.diaCobranca) };
+    try {
+      if (isEditing) { await api.put(`/assinaturas/${formData.id}`, payload); } 
+      else { await api.post('/assinaturas', payload); }
+      await recarregarAssinaturas();
+      handleClose();
+    } catch (error) { alert("Erro ao guardar. Verifica os dados."); }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Eliminar esta assinatura?")) {
+      try {
+        await api.delete(`/assinaturas/${id}`);
+        await recarregarAssinaturas();
+      } catch (error) { alert("Erro ao apagar."); }
+    }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button
-          variant="contained"
-          color="secondary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
-        >
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => handleOpen()}>
           Adicionar Assinatura
         </Button>
       </Box>
 
       <TableContainer component={Paper} variant="outlined">
         <Table>
-          <TableHead>
+          <TableHead sx={{ bgcolor: '#f0f0f0' }}>
             <TableRow>
-              <TableCell>
-                <strong>Nome</strong>
-              </TableCell>
-              <TableCell>
-                <strong>Fatura (Cartão)</strong>
-              </TableCell>
-              <TableCell>
-                <strong>Responsável</strong>
-              </TableCell>
-              <TableCell align="right">
-                <strong>Valor</strong>
-              </TableCell>
-              <TableCell align="right">
-                <strong>Dia</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Ações</strong>
-              </TableCell>
+              <TableCell><strong>Nome</strong></TableCell>
+              <TableCell><strong>Cartão</strong></TableCell>
+              <TableCell><strong>Responsável</strong></TableCell>
+              <TableCell align="center"><strong>Dia (Cobrança)</strong></TableCell>
+              <TableCell align="right"><strong>Valor</strong></TableCell>
+              <TableCell align="center"><strong>Ações</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {assinaturas.map((assinatura) => (
               <TableRow key={assinatura.id}>
                 <TableCell>{assinatura.nome}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={assinatura.fatura}
-                    size="small"
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell>{assinatura.responsavel}</TableCell>
-                <TableCell align="right">
-                  {Number(assinatura.valor).toLocaleString("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  })}
-                </TableCell>
-                <TableCell align="right">{assinatura.diaCobranca}</TableCell>
+                <TableCell><Chip label={assinatura.fatura} size="small" variant="outlined" /></TableCell>
+                <TableCell><Chip label={assinatura.responsavel} size="small" /></TableCell>
+                <TableCell align="center">{assinatura.diaCobranca}</TableCell>
+                <TableCell align="right"><strong>{formatarMoeda(assinatura.valor)}</strong></TableCell>
                 <TableCell align="center">
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleOpen(assinatura)}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => handleDelete(assinatura.id)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
+                  <IconButton color="primary" onClick={() => handleOpen(assinatura)}><EditIcon /></IconButton>
+                  <IconButton color="error" onClick={() => handleDelete(assinatura.id)}><DeleteIcon /></IconButton>
                 </TableCell>
               </TableRow>
             ))}
             {assinaturas.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  Nenhuma assinatura registrada.
-                </TableCell>
-              </TableRow>
+              <TableRow><TableCell colSpan={6} align="center">Nenhuma assinatura registada.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
       </TableContainer>
 
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-        <DialogTitle>
-          {isEditing ? "Editar Assinatura" : "Nova Assinatura"}
-        </DialogTitle>
+        <DialogTitle>{isEditing ? 'Editar Assinatura' : 'Nova Assinatura'}</DialogTitle>
         <DialogContent>
-          <TextField
-            margin="dense"
-            label="Nome da Assinatura"
-            name="nome"
-            value={formData.nome}
-            onChange={handleChange}
-            fullWidth
-            variant="outlined"
+          <TextField 
+            margin="dense" 
+            label="Nome da Assinatura (Ex: Netflix)" 
+            name="nome" 
+            value={formData.nome} 
+            onChange={handleChange} 
+            fullWidth 
+            variant="outlined" 
+            sx={{ mb: 3, mt: 1 }} 
           />
-          <TextField
-            margin="dense"
-            label="Fatura (Ex: Nubank)"
-            name="fatura"
-            value={formData.fatura}
-            onChange={handleChange}
-            fullWidth
-            variant="outlined"
-          />
-          <TextField
-            margin="dense"
-            label="Responsável"
-            name="responsavel"
-            value={formData.responsavel}
-            onChange={handleChange}
-            fullWidth
-            variant="outlined"
-          />
-          <TextField
-            margin="dense"
-            label="Valor"
-            name="valor"
-            type="number"
-            value={formData.valor}
-            onChange={handleChange}
-            fullWidth
-            variant="outlined"
-          />
-          <TextField
-            margin="dense"
-            label="Dia de Cobrança"
-            name="diaCobranca"
-            type="number"
-            value={formData.diaCobranca}
-            onChange={handleChange}
-            fullWidth
-            variant="outlined"
-          />
+          
+          {/* Caixa do Cartão de Crédito (Agora ocupa 100% da largura) */}
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel>Cartão de Crédito</InputLabel>
+            <Select 
+              name="faturaId" 
+              value={formData.faturaId} 
+              label="Cartão de Crédito" 
+              onChange={handleChange}
+            >
+              {faturas.map(fat => (<MenuItem key={fat.id} value={fat.id}>{fat.nome}</MenuItem>))}
+              {faturas.length === 0 && <MenuItem disabled value="">Nenhum cartão registado</MenuItem>}
+            </Select>
+          </FormControl>
+
+          {/* Caixa do Responsável (Agora ocupa 100% da largura e tem o botão de adicionar) */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 3 }}>
+            <FormControl fullWidth>
+              <InputLabel>Responsável</InputLabel>
+              <Select 
+                name="responsavelId" 
+                value={formData.responsavelId} 
+                label="Responsável" 
+                onChange={handleChange}
+              >
+                {responsaveis.map(resp => (<MenuItem key={resp.id} value={resp.id}>{resp.nome}</MenuItem>))}
+                {responsaveis.length === 0 && <MenuItem disabled value="">Nenhum responsável registado</MenuItem>}
+              </Select>
+            </FormControl>
+            {/* Opcional: Para ter o atalho de adicionar pessoa rapidamente */}
+            {/* Nota: Lembra-te de importar o PersonAddIcon do MUI Icons no topo do ficheiro se fores usar este botão */}
+          </Box>
+
+          {/* Mantemos o Dia e o Valor lado a lado pois são números pequenos */}
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <TextField margin="dense" label="Dia da Cobrança" name="diaCobranca" type="number" value={formData.diaCobranca} onChange={handleChange} fullWidth variant="outlined" />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField margin="dense" label="Valor Mensal" name="valor" type="number" value={formData.valor} onChange={handleChange} fullWidth variant="outlined" />
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose} color="inherit">
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} variant="contained" color="secondary">
-            Salvar
-          </Button>
+          <Button onClick={handleClose} color="inherit">Cancelar</Button>
+          <Button onClick={handleSave} variant="contained" color="secondary">Guardar</Button>
         </DialogActions>
       </Dialog>
     </Box>

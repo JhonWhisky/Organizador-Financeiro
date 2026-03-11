@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Responsavel {
+  id          Int          @id @default(autoincrement())
+  nome        String       @unique
+  salarios    Salario[]
+  compras     ItemFatura[]
+  assinaturas Assinatura[]
+  pagamentos  Pagamento[]
+}
+
+model Salario {
+  id            Int         @id @default(autoincrement())
+  nome          String
+  valor         Float
+  responsavelId Int
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+}
+
+model Fatura {
+  id             Int          @id @default(autoincrement())
+  nome           String       @unique
+  limite         Float
+  dataFechamento Int
+  dataVencimento Int
+  itens          ItemFatura[]
+  assinaturas    Assinatura[]
+}
+
+model ItemFatura {
+  id            Int         @id @default(autoincrement())
+  data          String
+  nome          String
+  tipo          String
+  vezes         Int
+  valorTotal    Float
+  
+  faturaId      Int
+  fatura        Fatura      @relation(fields: [faturaId], references: [id], onDelete: Cascade)
+  
+  responsavelId Int
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+}
+
+model Assinatura {
+  id            Int         @id @default(autoincrement())
+  nome          String
+  valor         Float
+  diaCobranca   Int
+  
+  faturaId      Int
+  fatura        Fatura      @relation(fields: [faturaId], references: [id], onDelete: Cascade)
+  
+  responsavelId Int
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+}
+
+model Pagamento {
+  id            Int         @id @default(autoincrement())
+  mes           Int
+  ano           Int
+  valor         Float
+  
+  responsavelId Int
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+}

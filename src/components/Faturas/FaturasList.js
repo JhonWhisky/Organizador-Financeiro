@@ -1,8 +1,10 @@
 import React, { useState, useContext } from 'react';
 import { FinanceContext } from '../../context/FinanceContext';
+import api from '../../services/api';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Button, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Box, Typography, Collapse, Chip, Grid, Divider
+  Button, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Box, Typography, Collapse, Chip, Grid, Divider,
+  FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -13,29 +15,30 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
 const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// --- Lógica de Cálculo de Itens da Fatura Individual ---
+// --- Lógica de Cálculo de Lançamentos do Mês ---
 const obterItensDoMes = (fatura, assinaturas, mes, ano) => {
   const itensNoMes = [];
   let totalFaturaMes = 0;
   let totalDevidoGeral = 0;
 
+  // 1. Processar Compras Parceladas
   fatura.itens.forEach(item => {
     const [anoCompra, mesCompra, diaCompra] = item.data.split('-').map(Number);
-    let mesFatura = mesCompra - 1;
+    let mesFatura = mesCompra - 1; 
     let anoFatura = anoCompra;
 
     if (diaCompra >= fatura.dataFechamento) {
-      mesFatura++;
+      mesFatura++; 
       if (mesFatura > 11) { mesFatura = 0; anoFatura++; }
     }
-
     const valorParcela = item.valorTotal / item.vezes;
 
     for (let i = 0; i < item.vezes; i++) {
-      let mesParcela = mesFatura + i;
+      let mesParcela = mesFatura + i; 
       let anoParcela = anoFatura + Math.floor(mesParcela / 12);
       mesParcela = mesParcela % 12;
 
@@ -43,7 +46,6 @@ const obterItensDoMes = (fatura, assinaturas, mes, ano) => {
       if (anoParcela > hoje.getFullYear() || (anoParcela === hoje.getFullYear() && mesParcela >= hoje.getMonth())) {
         totalDevidoGeral += valorParcela;
       }
-
       if (anoParcela === ano && mesParcela === mes) {
         itensNoMes.push({ ...item, idRender: `${item.id}-${i}`, parcelaAtual: i + 1, valorExibicao: valorParcela, isAssinatura: false });
         totalFaturaMes += valorParcela;
@@ -51,6 +53,7 @@ const obterItensDoMes = (fatura, assinaturas, mes, ano) => {
     }
   });
 
+  // 2. Injetar Assinaturas Vinculadas
   const assinaturasVinculadas = assinaturas.filter(a => a.fatura === fatura.nome);
   assinaturasVinculadas.forEach(ass => {
     itensNoMes.push({
@@ -63,11 +66,11 @@ const obterItensDoMes = (fatura, assinaturas, mes, ano) => {
 
   itensNoMes.sort((a, b) => a.data.localeCompare(b.data));
   const limiteDisponivel = (fatura.limite || 0) - totalDevidoGeral;
-
+  
   return { itensNoMes, totalFaturaMes, limiteDisponivel };
 };
 
-// --- Componente da Linha Expansível ---
+// --- Componente da Linha Expansível (Cartão) ---
 function LinhaFatura({ fatura, mesSelecionado, anoSelecionado, onEditFatura, onDeleteFatura, onAddItem, onEditItem, onDeleteItem }) {
   const [open, setOpen] = useState(false);
   const { assinaturas } = useContext(FinanceContext);
@@ -77,7 +80,7 @@ function LinhaFatura({ fatura, mesSelecionado, anoSelecionado, onEditFatura, onD
     <React.Fragment>
       <TableRow sx={{ '& > *': { borderBottom: 'unset' }, bgcolor: open ? '#f5f5f5' : 'inherit' }}>
         <TableCell>
-          <IconButton aria-label="expand row" size="small" onClick={() => setOpen(!open)}>
+          <IconButton size="small" onClick={() => setOpen(!open)}>
             {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
           </IconButton>
         </TableCell>
@@ -139,9 +142,7 @@ function LinhaFatura({ fatura, mesSelecionado, anoSelecionado, onEditFatura, onD
                       </TableCell>
                     </TableRow>
                   ))}
-                  {resumo.itensNoMes.length === 0 && (
-                    <TableRow><TableCell colSpan={6} align="center">Nenhum lançamento neste mês.</TableCell></TableRow>
-                  )}
+                  {resumo.itensNoMes.length === 0 && <TableRow><TableCell colSpan={6} align="center">Nenhum lançamento neste mês.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </Box>
@@ -154,7 +155,7 @@ function LinhaFatura({ fatura, mesSelecionado, anoSelecionado, onEditFatura, onD
 
 // --- Componente Principal ---
 export default function FaturasList() {
-  const { faturas, setFaturas, assinaturas, pagamentos, setPagamentos } = useContext(FinanceContext);
+  const { faturas, setFaturas, assinaturas, pagamentos, setPagamentos, responsaveis, setResponsaveis } = useContext(FinanceContext);
 
   const dataAtual = new Date();
   const [mesSelecionado, setMesSelecionado] = useState(dataAtual.getMonth());
@@ -162,8 +163,7 @@ export default function FaturasList() {
   const mesesStr = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
   const mudarMes = (direcao) => {
-    let novoMes = mesSelecionado + direcao;
-    let novoAno = anoSelecionado;
+    let novoMes = mesSelecionado + direcao; let novoAno = anoSelecionado;
     if (novoMes > 11) { novoMes = 0; novoAno++; }
     if (novoMes < 0) { novoMes = 11; novoAno--; }
     setMesSelecionado(novoMes); setAnoSelecionado(novoAno);
@@ -177,10 +177,22 @@ export default function FaturasList() {
   const [isEditingItem, setIsEditingItem] = useState(false);
   
   const [faturaData, setFaturaData] = useState({ id: null, nome: '', limite: '', dataFechamento: '', dataVencimento: '' });
-  const [itemData, setItemData] = useState({ id: null, faturaId: null, data: '', nome: '', tipo: '', vezes: 1, valorTotal: '', responsavel: '' });
-  const [pagamentoData, setPagamentoData] = useState({ responsavel: '', valor: '' });
+  const [itemData, setItemData] = useState({ id: null, faturaId: null, data: '', nome: '', tipo: '', vezes: 1, valorTotal: '', responsavelId: '' });
+  const [pagamentoData, setPagamentoData] = useState({ responsavelId: '', valor: '' });
 
-  // Funções da Fatura
+  // --- Função para recarregar as Faturas da API ---
+  const recarregarFaturas = async () => {
+    try {
+      const res = await api.get('/faturas');
+      const faturasFormatadas = res.data.map(fat => ({
+        ...fat,
+        itens: fat.itens.map(item => ({ ...item, responsavel: item.responsavel ? item.responsavel.nome : 'Não Informado' }))
+      }));
+      setFaturas(faturasFormatadas);
+    } catch (e) { console.error("Erro ao recarregar", e); }
+  };
+
+  // --- Funções da Fatura ---
   const handleOpenFatura = (fatura = null) => {
     if (fatura) {
       setFaturaData({ id: fatura.id, nome: fatura.nome, limite: fatura.limite, dataFechamento: fatura.dataFechamento, dataVencimento: fatura.dataVencimento });
@@ -192,118 +204,123 @@ export default function FaturasList() {
     setOpenFaturaModal(true);
   };
 
-  const handleSaveFatura = () => {
-    const dadosGuardar = { ...faturaData, limite: parseFloat(faturaData.limite), dataFechamento: parseInt(faturaData.dataFechamento), dataVencimento: parseInt(faturaData.dataVencimento) };
-    if (isEditingFatura) {
-      setFaturas(faturas.map(f => f.id === faturaData.id ? { ...f, ...dadosGuardar } : f));
-    } else {
-      setFaturas([...faturas, { ...dadosGuardar, id: Date.now(), itens: [] }]);
-    }
-    setOpenFaturaModal(false);
+  const handleSaveFatura = async () => {
+    const payload = { nome: faturaData.nome, limite: parseFloat(faturaData.limite), dataFechamento: parseInt(faturaData.dataFechamento), dataVencimento: parseInt(faturaData.dataVencimento) };
+    try {
+      if (isEditingFatura) { await api.put(`/faturas/${faturaData.id}`, payload); } 
+      else { await api.post('/faturas', payload); }
+      await recarregarFaturas();
+      setOpenFaturaModal(false);
+    } catch (error) { alert("Erro ao guardar o cartão."); }
   };
 
-  const handleDeleteFatura = (id) => setFaturas(faturas.filter(f => f.id !== id));
+  const handleDeleteFatura = async (id) => {
+    if (window.confirm("Apagar o cartão vai eliminar todas as compras vinculadas. Continuar?")) {
+      try { await api.delete(`/faturas/${id}`); await recarregarFaturas(); } 
+      catch (error) { alert("Erro ao apagar cartão."); }
+    }
+  };
 
-  // Funções dos Itens
+  // --- Funções das Compras (Itens) ---
   const handleOpenItem = (faturaId, item = null) => {
     if (item) {
-      setItemData({ ...item, faturaId });
+      const respEncontrado = responsaveis.find(r => r.nome === item.responsavel);
+      setItemData({ id: item.id, faturaId, data: item.data, nome: item.nome, tipo: item.tipo, vezes: item.vezes, valorTotal: item.valorTotal, responsavelId: respEncontrado ? respEncontrado.id : '' });
       setIsEditingItem(true);
     } else {
-      setItemData({ id: null, faturaId, data: '', nome: '', tipo: '', vezes: 1, valorTotal: '', responsavel: '' });
+      setItemData({ id: null, faturaId, data: '', nome: '', tipo: '', vezes: 1, valorTotal: '', responsavelId: '' });
       setIsEditingItem(false);
     }
     setOpenItemModal(true);
   };
 
-  const handleSaveItem = () => {
-    const { faturaId, ...novoItem } = itemData;
-    const itemFormatado = { ...novoItem, valorTotal: parseFloat(novoItem.valorTotal), vezes: parseInt(novoItem.vezes) };
-
-    setFaturas(faturas.map(fatura => {
-      if (fatura.id === faturaId) {
-        if (isEditingItem) {
-          return { ...fatura, itens: fatura.itens.map(i => i.id === itemFormatado.id ? itemFormatado : i) };
-        } else {
-          return { ...fatura, itens: [...fatura.itens, { ...itemFormatado, id: Date.now() }] };
-        }
-      }
-      return fatura;
-    }));
-    setOpenItemModal(false);
+  const handleSaveItem = async () => {
+    const payload = { data: itemData.data, nome: itemData.nome, tipo: itemData.tipo, vezes: parseInt(itemData.vezes), valorTotal: parseFloat(itemData.valorTotal), faturaId: itemData.faturaId, responsavelId: parseInt(itemData.responsavelId) };
+    try {
+      if (isEditingItem) { await api.put(`/itens/${itemData.id}`, payload); } 
+      else { await api.post('/itens', payload); }
+      await recarregarFaturas();
+      setOpenItemModal(false);
+    } catch (error) { alert("Erro ao guardar a compra. Verifica os dados."); }
   };
 
-  const handleDeleteItem = (faturaId, itemId) => {
-    setFaturas(faturas.map(fatura => {
-      if (fatura.id === faturaId) { return { ...fatura, itens: fatura.itens.filter(i => i.id !== itemId) }; }
-      return fatura;
-    }));
+  const handleDeleteItem = async (faturaId, itemId) => {
+    if (window.confirm("Eliminar esta compra?")) {
+      try { await api.delete(`/itens/${itemId}`); await recarregarFaturas(); } 
+      catch (error) { alert("Erro ao eliminar compra."); }
+    }
   };
 
-  // NOVO: Função para calcular o Acerto Global do mês
+  const criarNovoResponsavel = async () => {
+    const nome = window.prompt("Nome da pessoa (Responsável)?");
+    if (!nome) return;
+    try {
+      const res = await api.post('/responsaveis', { nome });
+      setResponsaveis([...responsaveis, res.data]);
+      setItemData({ ...itemData, responsavelId: res.data.id });
+    } catch (error) { alert("Erro ao criar responsável."); }
+  };
+
+  // --- Funções de Pagamento e Acerto Global ---
   const calcularAcertoGlobal = () => {
     const divisao = {};
     const inicializarDivisao = (resp) => { if (!divisao[resp]) divisao[resp] = { total: 0, pago: 0 }; };
 
-    // 1. Somar compras de todas as faturas
     faturas.forEach(fatura => {
       fatura.itens.forEach(item => {
         const [anoCompra, mesCompra, diaCompra] = item.data.split('-').map(Number);
-        let mesFatura = mesCompra - 1;
-        let anoFatura = anoCompra;
-
-        if (diaCompra >= fatura.dataFechamento) {
-          mesFatura++;
-          if (mesFatura > 11) { mesFatura = 0; anoFatura++; }
-        }
-
+        let mesFatura = mesCompra - 1; let anoFatura = anoCompra;
+        if (diaCompra >= fatura.dataFechamento) { mesFatura++; if (mesFatura > 11) { mesFatura = 0; anoFatura++; } }
         const valorParcela = item.valorTotal / item.vezes;
         for (let i = 0; i < item.vezes; i++) {
-          let mesParcela = mesFatura + i;
-          let anoParcela = anoFatura + Math.floor(mesParcela / 12);
-          mesParcela = mesParcela % 12;
-
+          let mesParcela = mesFatura + i; let anoParcela = anoFatura + Math.floor(mesParcela / 12); mesParcela = mesParcela % 12;
           if (anoParcela === anoSelecionado && mesParcela === mesSelecionado) {
-            const resp = item.responsavel || 'Não Informado';
-            inicializarDivisao(resp);
-            divisao[resp].total += valorParcela;
+            const resp = item.responsavel || 'Não Informado'; inicializarDivisao(resp); divisao[resp].total += valorParcela;
           }
         }
       });
-      
-      // Somar assinaturas vinculadas a esta fatura
-      const assinaturasVinculadas = assinaturas.filter(a => a.fatura === fatura.nome);
-      assinaturasVinculadas.forEach(ass => {
-        const resp = ass.responsavel || 'Não Informado';
-        inicializarDivisao(resp);
-        divisao[resp].total += ass.valor;
+      assinaturas.filter(a => a.fatura === fatura.nome).forEach(ass => {
+        const resp = ass.responsavel || 'Não Informado'; inicializarDivisao(resp); divisao[resp].total += ass.valor;
       });
     });
 
-    // 2. Somar pagamentos efetuados globalmente neste mês
     pagamentos.forEach(pag => {
-      if (pag.mes === mesSelecionado && pag.ano === anoSelecionado) {
-        inicializarDivisao(pag.responsavel);
-        divisao[pag.responsavel].pago += pag.valor;
+      if (pag.mes === mesSelecionado && pag.ano === anoSelecionado) { 
+        inicializarDivisao(pag.responsavel); 
+        divisao[pag.responsavel].pago += pag.valor; 
       }
     });
 
-    return Object.keys(divisao).map(resp => ({
-      nome: resp, total: divisao[resp].total, pago: divisao[resp].pago, restante: divisao[resp].total - divisao[resp].pago
-    }));
+    return Object.keys(divisao).map(resp => ({ nome: resp, total: divisao[resp].total, pago: divisao[resp].pago, restante: divisao[resp].total - divisao[resp].pago }));
   };
 
   const acertoGlobal = calcularAcertoGlobal();
 
-  const handleSavePagamento = () => {
-    setPagamentos([...pagamentos, {
-      id: Date.now(),
-      mes: mesSelecionado,
-      ano: anoSelecionado,
-      responsavel: pagamentoData.responsavel,
-      valor: parseFloat(pagamentoData.valor)
-    }]);
-    setOpenPagamentoModal(false);
+  const handleSavePagamento = async () => {
+    try {
+      if (!pagamentoData.responsavelId || !pagamentoData.valor) {
+        alert("Preenche todos os campos para registar o pagamento.");
+        return;
+      }
+      
+      // Salva na API
+      await api.post('/pagamentos', {
+        mes: mesSelecionado,
+        ano: anoSelecionado,
+        valor: parseFloat(pagamentoData.valor),
+        responsavelId: parseInt(pagamentoData.responsavelId)
+      });
+      
+      // Recarrega os pagamentos
+      const resPagamentos = await api.get('/pagamentos');
+      setPagamentos(resPagamentos.data.map(pag => ({
+        ...pag, responsavel: pag.responsavel ? pag.responsavel.nome : 'Não Informado'
+      })));
+      
+      setOpenPagamentoModal(false);
+    } catch (error) {
+      alert("Erro ao registar pagamento.");
+    }
   };
 
   return (
@@ -332,21 +349,18 @@ export default function FaturasList() {
           </TableHead>
           <TableBody>
             {faturas.map((fatura) => (
-              <LinhaFatura 
-                key={fatura.id} fatura={fatura} mesSelecionado={mesSelecionado} anoSelecionado={anoSelecionado}
-                onEditFatura={handleOpenFatura} onDeleteFatura={handleDeleteFatura}
-                onAddItem={handleOpenItem} onEditItem={handleOpenItem} onDeleteItem={handleDeleteItem}
-              />
+              <LinhaFatura key={fatura.id} fatura={fatura} mesSelecionado={mesSelecionado} anoSelecionado={anoSelecionado} onEditFatura={handleOpenFatura} onDeleteFatura={handleDeleteFatura} onAddItem={handleOpenItem} onEditItem={handleOpenItem} onDeleteItem={handleDeleteItem} />
             ))}
+            {faturas.length === 0 && <TableRow><TableCell colSpan={6} align="center">Nenhum cartão registado.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </TableContainer>
 
-      {/* NOVO: Painel de Acerto de Contas Global */}
+      {/* Painel de Acerto Global */}
       <Paper elevation={2} sx={{ p: 3, bgcolor: '#fff', borderLeft: '5px solid #1976d2' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" fontWeight="bold">Acerto de Contas Global (Todos os Cartões)</Typography>
-          <Button variant="outlined" color="primary" startIcon={<PaymentsIcon />} onClick={() => { setPagamentoData({ responsavel: '', valor: '' }); setOpenPagamentoModal(true); }}>
+          <Button variant="outlined" color="primary" startIcon={<PaymentsIcon />} onClick={() => { setPagamentoData({ responsavelId: '', valor: '' }); setOpenPagamentoModal(true); }}>
             Informar Pagamento Geral
           </Button>
         </Box>
@@ -356,26 +370,13 @@ export default function FaturasList() {
             <Grid item xs={12} sm={6} md={4} key={resp.nome}>
               <Paper variant="outlined" sx={{ p: 2, bgcolor: resp.restante <= 0 ? '#f1f8e9' : '#fafafa' }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>{resp.nome}</Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Total a Pagar:</Typography>
-                  <Typography variant="body2" fontWeight="bold">{formatarMoeda(resp.total)}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Já Pagou:</Typography>
-                  <Typography variant="body2" color="success.main" fontWeight="bold">{formatarMoeda(resp.pago)}</Typography>
-                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Typography variant="body2" color="text.secondary">Total a Pagar:</Typography><Typography variant="body2" fontWeight="bold">{formatarMoeda(resp.total)}</Typography></Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Typography variant="body2" color="text.secondary">Já Pagou:</Typography><Typography variant="body2" color="success.main" fontWeight="bold">{formatarMoeda(resp.pago)}</Typography></Box>
                 <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body1" fontWeight="bold">Restante:</Typography>
-                  <Typography variant="body1" fontWeight="bold" color={resp.restante <= 0 ? 'success.main' : 'error.main'}>
-                    {formatarMoeda(resp.restante)}
-                  </Typography>
-                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body1" fontWeight="bold">Restante:</Typography><Typography variant="body1" fontWeight="bold" color={resp.restante <= 0 ? 'success.main' : 'error.main'}>{formatarMoeda(resp.restante)}</Typography></Box>
               </Paper>
             </Grid>
-          )) : (
-            <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Nenhum lançamento registado para este mês.</Typography>
-          )}
+          )) : ( <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Nenhum lançamento registado para este mês.</Typography> )}
         </Grid>
       </Paper>
 
@@ -397,9 +398,19 @@ export default function FaturasList() {
       <Dialog open={openItemModal} onClose={() => setOpenItemModal(false)} fullWidth maxWidth="sm">
         <DialogTitle>{isEditingItem ? 'Editar Compra' : 'Nova Compra'}</DialogTitle>
         <DialogContent>
-          <TextField margin="dense" label="Data (YYYY-MM-DD)" type="date" value={itemData.data} onChange={(e) => setItemData({...itemData, data: e.target.value})} fullWidth variant="outlined" InputLabelProps={{ shrink: true }} />
-          <TextField margin="dense" label="Nome da Compra" value={itemData.nome} onChange={(e) => setItemData({...itemData, nome: e.target.value})} fullWidth variant="outlined" />
-          <TextField margin="dense" label="Responsável (Ex: João, Maria)" value={itemData.responsavel} onChange={(e) => setItemData({...itemData, responsavel: e.target.value})} fullWidth variant="outlined" />
+          <TextField margin="dense" label="Data (YYYY-MM-DD)" type="date" value={itemData.data} onChange={(e) => setItemData({...itemData, data: e.target.value})} fullWidth variant="outlined" InputLabelProps={{ shrink: true }} sx={{ mb: 2, mt: 1 }} />
+          <TextField margin="dense" label="Nome da Compra" value={itemData.nome} onChange={(e) => setItemData({...itemData, nome: e.target.value})} fullWidth variant="outlined" sx={{ mb: 2 }} />
+          
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Responsável</InputLabel>
+              <Select value={itemData.responsavelId} label="Responsável" onChange={(e) => setItemData({...itemData, responsavelId: e.target.value})}>
+                {responsaveis.map(resp => (<MenuItem key={resp.id} value={resp.id}>{resp.nome}</MenuItem>))}
+              </Select>
+            </FormControl>
+            <Button variant="outlined" color="primary" onClick={criarNovoResponsavel} sx={{ height: 56 }}><PersonAddIcon /></Button>
+          </Box>
+
           <TextField margin="dense" label="Tipo (ex: Alimentação)" value={itemData.tipo} onChange={(e) => setItemData({...itemData, tipo: e.target.value})} fullWidth variant="outlined" />
           <Grid container spacing={2}>
             <Grid item xs={6}><TextField margin="dense" label="Parcelas" type="number" value={itemData.vezes} onChange={(e) => setItemData({...itemData, vezes: e.target.value})} fullWidth variant="outlined" /></Grid>
@@ -414,7 +425,18 @@ export default function FaturasList() {
         <DialogTitle>Informar Pagamento Geral</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>Registe o valor total transferido para pagar as despesas de {mesesStr[mesSelecionado]}.</Typography>
-          <TextField margin="dense" label="Quem pagou? (Ex: João)" value={pagamentoData.responsavel} onChange={(e) => setPagamentoData({...pagamentoData, responsavel: e.target.value})} fullWidth variant="outlined" />
+          
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Quem pagou?</InputLabel>
+            <Select 
+              value={pagamentoData.responsavelId} 
+              label="Quem pagou?" 
+              onChange={(e) => setPagamentoData({...pagamentoData, responsavelId: e.target.value})}
+            >
+              {responsaveis.map(resp => (<MenuItem key={resp.id} value={resp.id}>{resp.nome}</MenuItem>))}
+            </Select>
+          </FormControl>
+          
           <TextField margin="dense" label="Valor Pago" type="number" value={pagamentoData.valor} onChange={(e) => setPagamentoData({...pagamentoData, valor: e.target.value})} fullWidth variant="outlined" />
         </DialogContent>
         <DialogActions><Button onClick={() => setOpenPagamentoModal(false)}>Cancelar</Button><Button onClick={handleSavePagamento} variant="contained" color="success">Registar</Button></DialogActions>

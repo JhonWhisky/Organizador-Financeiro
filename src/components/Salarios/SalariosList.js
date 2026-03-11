@@ -1,19 +1,22 @@
 import React, { useState, useContext } from 'react';
 import { FinanceContext } from '../../context/FinanceContext';
+import api from '../../services/api'; // O nosso cliente Axios
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Button, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Box, Typography, Chip
+  Button, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Box, Typography, Chip,
+  FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
-const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 
 export default function SalariosList() {
-  const { salarios, setSalarios, faturas, assinaturas } = useContext(FinanceContext);
+  const { salarios, setSalarios, faturas, assinaturas, responsaveis, setResponsaveis } = useContext(FinanceContext);
 
   // Estados do Histórico de Meses
   const dataAtual = new Date();
@@ -32,15 +35,23 @@ export default function SalariosList() {
   // Estados do Modal
   const [open, setOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ id: null, nome: '', responsavel: '', valor: '' });
+  // O estado agora usa "responsavelId" para casar com a base de dados
+  const [formData, setFormData] = useState({ id: null, nome: '', responsavelId: '', valor: '' });
 
-  // Funções do CRUD de Salários
+  // Funções do CRUD
   const handleOpen = (salario = null) => {
     if (salario) {
-      setFormData({ ...salario });
+      // Procurar o ID do responsável baseado no nome que está na lista
+      const respEncontrado = responsaveis.find(r => r.nome === salario.responsavel);
+      setFormData({ 
+        id: salario.id, 
+        nome: salario.nome, 
+        responsavelId: respEncontrado ? respEncontrado.id : '', 
+        valor: salario.valor 
+      });
       setIsEditing(true);
     } else {
-      setFormData({ id: null, nome: '', responsavel: '', valor: '' });
+      setFormData({ id: null, nome: '', responsavelId: '', valor: '' });
       setIsEditing(false);
     }
     setOpen(true);
@@ -48,18 +59,42 @@ export default function SalariosList() {
 
   const handleClose = () => setOpen(false);
 
-  const handleSave = () => {
-    if (isEditing) {
-      setSalarios(salarios.map(s => (s.id === formData.id ? { ...formData, valor: parseFloat(formData.valor) } : s)));
-    } else {
-      const novoSalario = { ...formData, id: Date.now(), valor: parseFloat(formData.valor) };
-      setSalarios([...salarios, novoSalario]);
+  // LIGADO À API REAL
+  const handleSave = async () => {
+    try {
+      if (isEditing) {
+        // Atualizar na API
+        await api.put(`/salarios/${formData.id}`, formData);
+      } else {
+        // Criar novo na API
+        await api.post('/salarios', formData);
+      }
+      
+      // Recarregar os salários após a alteração para atualizar a tabela
+      const res = await api.get('/salarios');
+      const salariosFormatados = res.data.map(sal => ({
+        ...sal,
+        responsavel: sal.responsavel.nome
+      }));
+      setSalarios(salariosFormatados);
+      
+      handleClose();
+    } catch (error) {
+      console.error("Erro ao guardar salário:", error);
+      alert("Ocorreu um erro ao guardar. Verifica se todos os campos estão preenchidos.");
     }
-    handleClose();
   };
 
-  const handleDelete = (id) => {
-    setSalarios(salarios.filter(s => s.id !== id));
+  // LIGADO À API REAL
+  const handleDelete = async (id) => {
+    if (window.confirm('Tens a certeza que queres eliminar este salário?')) {
+      try {
+        await api.delete(`/salarios/${id}`);
+        setSalarios(salarios.filter(s => s.id !== id));
+      } catch (error) {
+        console.error("Erro ao eliminar:", error);
+      }
+    }
   };
 
   const handleChange = (e) => {
@@ -67,51 +102,47 @@ export default function SalariosList() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Função para calcular o total de despesas de um responsável no mês selecionado
+  // Atalho para criar um responsável rapidamente
+  const criarNovoResponsavel = async () => {
+    const nome = window.prompt("Qual é o nome da pessoa (Responsável)?");
+    if (!nome) return;
+
+    try {
+      const res = await api.post('/responsaveis', { nome });
+      setResponsaveis([...responsaveis, res.data]);
+      // Seleciona-o automaticamente no formulário
+      setFormData({ ...formData, responsavelId: res.data.id });
+    } catch (error) {
+      alert("Erro ao criar responsável. Esse nome já pode existir.");
+    }
+  };
+
+  // Função para calcular o total de despesas (Mantém-se igual, simulada nas faturas)
   const calcularDespesasPorResponsavel = (nomeResponsavel) => {
     let totalDespesas = 0;
-
-    // 1. Somar compras parceladas das faturas
     faturas.forEach(fatura => {
       fatura.itens.forEach(item => {
         if ((item.responsavel || 'Não Informado') === nomeResponsavel) {
           const [anoCompra, mesCompra, diaCompra] = item.data.split('-').map(Number);
-          let mesFatura = mesCompra - 1;
-          let anoFatura = anoCompra;
-
+          let mesFatura = mesCompra - 1; let anoFatura = anoCompra;
           if (diaCompra >= fatura.dataFechamento) {
-            mesFatura++;
-            if (mesFatura > 11) { mesFatura = 0; anoFatura++; }
+            mesFatura++; if (mesFatura > 11) { mesFatura = 0; anoFatura++; }
           }
-
           const valorParcela = item.valorTotal / item.vezes;
-
           for (let i = 0; i < item.vezes; i++) {
-            let mesParcela = mesFatura + i;
-            let anoParcela = anoFatura + Math.floor(mesParcela / 12);
+            let mesParcela = mesFatura + i; let anoParcela = anoFatura + Math.floor(mesParcela / 12);
             mesParcela = mesParcela % 12;
-
-            if (anoParcela === anoSelecionado && mesParcela === mesSelecionado) {
-              totalDespesas += valorParcela;
-            }
+            if (anoParcela === anoSelecionado && mesParcela === mesSelecionado) { totalDespesas += valorParcela; }
           }
         }
       });
     });
-
-    // 2. Somar assinaturas mensais
-    assinaturas.forEach(ass => {
-      if ((ass.responsavel || 'Não Informado') === nomeResponsavel) {
-        totalDespesas += ass.valor;
-      }
-    });
-
+    assinaturas.forEach(ass => { if ((ass.responsavel || 'Não Informado') === nomeResponsavel) { totalDespesas += ass.valor; } });
     return totalDespesas;
   };
 
   return (
     <Box>
-      {/* Navegador de Histórico */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 2 }}>
         <IconButton onClick={() => mudarMes(-1)} color="success"><ChevronLeftIcon /></IconButton>
         <Typography variant="h6" fontWeight="bold" color="success.main">
@@ -149,33 +180,22 @@ export default function SalariosList() {
                   <TableCell><Chip size="small" label={salario.responsavel} /></TableCell>
                   <TableCell align="right">{formatarMoeda(salario.valor)}</TableCell>
                   <TableCell align="right">
-                    <Typography color="error.main" fontWeight="bold">
-                      - {formatarMoeda(despesas)}
-                    </Typography>
+                    <Typography color="error.main" fontWeight="bold">- {formatarMoeda(despesas)}</Typography>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography 
-                      fontWeight="bold" 
-                      color={valorLiquido >= 0 ? 'success.main' : 'error.main'}
-                    >
+                    <Typography fontWeight="bold" color={valorLiquido >= 0 ? 'success.main' : 'error.main'}>
                       {formatarMoeda(valorLiquido)}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton color="primary" onClick={() => handleOpen(salario)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton color="error" onClick={() => handleDelete(salario.id)}>
-                      <DeleteIcon />
-                    </IconButton>
+                    <IconButton color="primary" onClick={() => handleOpen(salario)}><EditIcon /></IconButton>
+                    <IconButton color="error" onClick={() => handleDelete(salario.id)}><DeleteIcon /></IconButton>
                   </TableCell>
                 </TableRow>
               );
             })}
             {salarios.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} align="center">Nenhum salário registado.</TableCell>
-              </TableRow>
+              <TableRow><TableCell colSpan={6} align="center">Nenhum salário registado ainda. Cria o primeiro!</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -187,12 +207,31 @@ export default function SalariosList() {
         <DialogContent>
           <TextField
             margin="dense" label="Nome do Salário (Ex: Fixo, Renda Extra)" name="nome"
-            value={formData.nome} onChange={handleChange} fullWidth variant="outlined"
+            value={formData.nome} onChange={handleChange} fullWidth variant="outlined" sx={{ mb: 2, mt: 1 }}
           />
-          <TextField
-            margin="dense" label="Responsável (Deve ser igual ao das compras)" name="responsavel"
-            value={formData.responsavel} onChange={handleChange} fullWidth variant="outlined"
-          />
+          
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Responsável</InputLabel>
+              <Select
+                name="responsavelId"
+                value={formData.responsavelId}
+                label="Responsável"
+                onChange={handleChange}
+              >
+                {responsaveis.map(resp => (
+                  <MenuItem key={resp.id} value={resp.id}>{resp.nome}</MenuItem>
+                ))}
+                {responsaveis.length === 0 && (
+                  <MenuItem disabled value="">Nenhum responsável registado</MenuItem>
+                )}
+              </Select>
+            </FormControl>
+            <Button variant="outlined" color="primary" onClick={criarNovoResponsavel} sx={{ height: 56 }}>
+              <PersonAddIcon />
+            </Button>
+          </Box>
+
           <TextField
             margin="dense" label="Valor Bruto" name="valor" type="number"
             value={formData.valor} onChange={handleChange} fullWidth variant="outlined"
