@@ -84,11 +84,13 @@ app.get('/salarios', async (req, res) => {
   }
 });
 
-// Iniciar o servidor
+// Iniciar o servidor localmente (Podes comentar ou deixar assim)
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor a rodar na porta ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor a rodar na porta ${PORT}`);
+  });
+}
 
 // Atualizar um salário existente
 app.put('/salarios/:id', async (req, res) => {
