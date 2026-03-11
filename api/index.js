@@ -10,6 +10,13 @@ app.use(cors());
 // Permite que a API entenda dados enviados no formato JSON
 app.use(express.json());
 
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api')) {
+    req.url = req.url.replace('/api', '');
+  }
+  next();
+});
+
 // Rota de Teste
 app.get('/ping', (req, res) => {
   res.json({ message: 'API do Organizador Financeiro está online e conectada ao banco!' });
