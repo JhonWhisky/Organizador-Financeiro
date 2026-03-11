@@ -4,7 +4,10 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon index.js"
+    "start": "react-scripts start",
+    "build": "cd api && yarn install && npx prisma generate && cd .. && react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

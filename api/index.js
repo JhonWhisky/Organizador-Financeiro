@@ -285,3 +285,6 @@ app.get('/pagamentos', async (req, res) => {
     res.json(pagamentos);
   } catch (error) { res.status(500).json({ error: 'Erro ao buscar pagamentos.' }); }
 });
+
+// O Vercel precisa que exportemos a app em vez de apenas fazer o app.listen
+module.exports = app;
