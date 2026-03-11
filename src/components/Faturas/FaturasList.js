@@ -1,0 +1,424 @@
+import React, { useState, useContext } from 'react';
+import { FinanceContext } from '../../context/FinanceContext';
+import {
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+  Button, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Box, Typography, Collapse, Chip, Grid, Divider
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import PaymentsIcon from '@mui/icons-material/Payments';
+
+const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// --- Lógica de Cálculo de Itens da Fatura Individual ---
+const obterItensDoMes = (fatura, assinaturas, mes, ano) => {
+  const itensNoMes = [];
+  let totalFaturaMes = 0;
+  let totalDevidoGeral = 0;
+
+  fatura.itens.forEach(item => {
+    const [anoCompra, mesCompra, diaCompra] = item.data.split('-').map(Number);
+    let mesFatura = mesCompra - 1;
+    let anoFatura = anoCompra;
+
+    if (diaCompra >= fatura.dataFechamento) {
+      mesFatura++;
+      if (mesFatura > 11) { mesFatura = 0; anoFatura++; }
+    }
+
+    const valorParcela = item.valorTotal / item.vezes;
+
+    for (let i = 0; i < item.vezes; i++) {
+      let mesParcela = mesFatura + i;
+      let anoParcela = anoFatura + Math.floor(mesParcela / 12);
+      mesParcela = mesParcela % 12;
+
+      const hoje = new Date();
+      if (anoParcela > hoje.getFullYear() || (anoParcela === hoje.getFullYear() && mesParcela >= hoje.getMonth())) {
+        totalDevidoGeral += valorParcela;
+      }
+
+      if (anoParcela === ano && mesParcela === mes) {
+        itensNoMes.push({ ...item, idRender: `${item.id}-${i}`, parcelaAtual: i + 1, valorExibicao: valorParcela, isAssinatura: false });
+        totalFaturaMes += valorParcela;
+      }
+    }
+  });
+
+  const assinaturasVinculadas = assinaturas.filter(a => a.fatura === fatura.nome);
+  assinaturasVinculadas.forEach(ass => {
+    itensNoMes.push({
+      id: ass.id, idRender: `ass-${ass.id}-${mes}-${ano}`, data: `${ano}-${String(mes + 1).padStart(2, '0')}-${String(ass.diaCobranca || 1).padStart(2, '0')}`,
+      nome: ass.nome, tipo: 'Assinatura', vezes: 1, parcelaAtual: 1, valorExibicao: ass.valor, isAssinatura: true, responsavel: ass.responsavel || 'Não Informado'
+    });
+    totalFaturaMes += ass.valor;
+    totalDevidoGeral += ass.valor;
+  });
+
+  itensNoMes.sort((a, b) => a.data.localeCompare(b.data));
+  const limiteDisponivel = (fatura.limite || 0) - totalDevidoGeral;
+
+  return { itensNoMes, totalFaturaMes, limiteDisponivel };
+};
+
+// --- Componente da Linha Expansível ---
+function LinhaFatura({ fatura, mesSelecionado, anoSelecionado, onEditFatura, onDeleteFatura, onAddItem, onEditItem, onDeleteItem }) {
+  const [open, setOpen] = useState(false);
+  const { assinaturas } = useContext(FinanceContext);
+  const resumo = obterItensDoMes(fatura, assinaturas, mesSelecionado, anoSelecionado);
+
+  return (
+    <React.Fragment>
+      <TableRow sx={{ '& > *': { borderBottom: 'unset' }, bgcolor: open ? '#f5f5f5' : 'inherit' }}>
+        <TableCell>
+          <IconButton aria-label="expand row" size="small" onClick={() => setOpen(!open)}>
+            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+          </IconButton>
+        </TableCell>
+        <TableCell component="th" scope="row">
+          <Typography variant="subtitle2" fontWeight="bold">{fatura.nome}</Typography>
+          <Typography variant="caption" color="text.secondary">Vence dia {fatura.dataVencimento}</Typography>
+        </TableCell>
+        <TableCell align="right">{formatarMoeda(fatura.limite || 0)}</TableCell>
+        <TableCell align="right">
+          <Chip label={formatarMoeda(resumo.limiteDisponivel)} color={resumo.limiteDisponivel < 0 ? 'error' : 'success'} variant="outlined" size="small" />
+        </TableCell>
+        <TableCell align="right">
+          <Typography fontWeight="bold" color="error">{formatarMoeda(resumo.totalFaturaMes)}</Typography>
+        </TableCell>
+        <TableCell align="center">
+          <IconButton color="primary" onClick={() => onEditFatura(fatura)}><EditIcon /></IconButton>
+          <IconButton color="error" onClick={() => onDeleteFatura(fatura.id)}><DeleteIcon /></IconButton>
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ margin: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 2, bgcolor: '#fafafa' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle1" fontWeight="bold">Lançamentos da Fatura</Typography>
+                <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => onAddItem(fatura.id)}>Nova Compra</Button>
+              </Box>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Data</TableCell>
+                    <TableCell>Descrição</TableCell>
+                    <TableCell>Responsável</TableCell>
+                    <TableCell align="center">Parcela</TableCell>
+                    <TableCell align="right">Valor</TableCell>
+                    <TableCell align="center">Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {resumo.itensNoMes.map((item) => (
+                    <TableRow key={item.idRender} sx={{ bgcolor: item.isAssinatura ? '#f3e5f5' : 'inherit' }}>
+                      <TableCell>{item.data}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          {item.isAssinatura && <AutorenewIcon fontSize="small" color="secondary" sx={{ mr: 1 }} />}
+                          <Typography variant="body2">{item.nome}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell><Chip size="small" label={item.responsavel || 'Não Informado'} /></TableCell>
+                      <TableCell align="center">{item.isAssinatura ? '-' : `${item.parcelaAtual}/${item.vezes}`}</TableCell>
+                      <TableCell align="right"><strong>{formatarMoeda(item.valorExibicao)}</strong></TableCell>
+                      <TableCell align="center">
+                        {!item.isAssinatura ? (
+                          <>
+                            <IconButton size="small" color="primary" onClick={() => onEditItem(fatura.id, item)}><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" color="error" onClick={() => onDeleteItem(fatura.id, item.id)}><DeleteIcon fontSize="small" /></IconButton>
+                          </>
+                        ) : (<Typography variant="caption" color="text.secondary">Auto</Typography>)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {resumo.itensNoMes.length === 0 && (
+                    <TableRow><TableCell colSpan={6} align="center">Nenhum lançamento neste mês.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </React.Fragment>
+  );
+}
+
+// --- Componente Principal ---
+export default function FaturasList() {
+  const { faturas, setFaturas, assinaturas, pagamentos, setPagamentos } = useContext(FinanceContext);
+
+  const dataAtual = new Date();
+  const [mesSelecionado, setMesSelecionado] = useState(dataAtual.getMonth());
+  const [anoSelecionado, setAnoSelecionado] = useState(dataAtual.getFullYear());
+  const mesesStr = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+  const mudarMes = (direcao) => {
+    let novoMes = mesSelecionado + direcao;
+    let novoAno = anoSelecionado;
+    if (novoMes > 11) { novoMes = 0; novoAno++; }
+    if (novoMes < 0) { novoMes = 11; novoAno--; }
+    setMesSelecionado(novoMes); setAnoSelecionado(novoAno);
+  };
+
+  // Estados dos Modais
+  const [openFaturaModal, setOpenFaturaModal] = useState(false);
+  const [openItemModal, setOpenItemModal] = useState(false);
+  const [openPagamentoModal, setOpenPagamentoModal] = useState(false);
+  const [isEditingFatura, setIsEditingFatura] = useState(false);
+  const [isEditingItem, setIsEditingItem] = useState(false);
+  
+  const [faturaData, setFaturaData] = useState({ id: null, nome: '', limite: '', dataFechamento: '', dataVencimento: '' });
+  const [itemData, setItemData] = useState({ id: null, faturaId: null, data: '', nome: '', tipo: '', vezes: 1, valorTotal: '', responsavel: '' });
+  const [pagamentoData, setPagamentoData] = useState({ responsavel: '', valor: '' });
+
+  // Funções da Fatura
+  const handleOpenFatura = (fatura = null) => {
+    if (fatura) {
+      setFaturaData({ id: fatura.id, nome: fatura.nome, limite: fatura.limite, dataFechamento: fatura.dataFechamento, dataVencimento: fatura.dataVencimento });
+      setIsEditingFatura(true);
+    } else {
+      setFaturaData({ id: null, nome: '', limite: '', dataFechamento: '', dataVencimento: '' });
+      setIsEditingFatura(false);
+    }
+    setOpenFaturaModal(true);
+  };
+
+  const handleSaveFatura = () => {
+    const dadosGuardar = { ...faturaData, limite: parseFloat(faturaData.limite), dataFechamento: parseInt(faturaData.dataFechamento), dataVencimento: parseInt(faturaData.dataVencimento) };
+    if (isEditingFatura) {
+      setFaturas(faturas.map(f => f.id === faturaData.id ? { ...f, ...dadosGuardar } : f));
+    } else {
+      setFaturas([...faturas, { ...dadosGuardar, id: Date.now(), itens: [] }]);
+    }
+    setOpenFaturaModal(false);
+  };
+
+  const handleDeleteFatura = (id) => setFaturas(faturas.filter(f => f.id !== id));
+
+  // Funções dos Itens
+  const handleOpenItem = (faturaId, item = null) => {
+    if (item) {
+      setItemData({ ...item, faturaId });
+      setIsEditingItem(true);
+    } else {
+      setItemData({ id: null, faturaId, data: '', nome: '', tipo: '', vezes: 1, valorTotal: '', responsavel: '' });
+      setIsEditingItem(false);
+    }
+    setOpenItemModal(true);
+  };
+
+  const handleSaveItem = () => {
+    const { faturaId, ...novoItem } = itemData;
+    const itemFormatado = { ...novoItem, valorTotal: parseFloat(novoItem.valorTotal), vezes: parseInt(novoItem.vezes) };
+
+    setFaturas(faturas.map(fatura => {
+      if (fatura.id === faturaId) {
+        if (isEditingItem) {
+          return { ...fatura, itens: fatura.itens.map(i => i.id === itemFormatado.id ? itemFormatado : i) };
+        } else {
+          return { ...fatura, itens: [...fatura.itens, { ...itemFormatado, id: Date.now() }] };
+        }
+      }
+      return fatura;
+    }));
+    setOpenItemModal(false);
+  };
+
+  const handleDeleteItem = (faturaId, itemId) => {
+    setFaturas(faturas.map(fatura => {
+      if (fatura.id === faturaId) { return { ...fatura, itens: fatura.itens.filter(i => i.id !== itemId) }; }
+      return fatura;
+    }));
+  };
+
+  // NOVO: Função para calcular o Acerto Global do mês
+  const calcularAcertoGlobal = () => {
+    const divisao = {};
+    const inicializarDivisao = (resp) => { if (!divisao[resp]) divisao[resp] = { total: 0, pago: 0 }; };
+
+    // 1. Somar compras de todas as faturas
+    faturas.forEach(fatura => {
+      fatura.itens.forEach(item => {
+        const [anoCompra, mesCompra, diaCompra] = item.data.split('-').map(Number);
+        let mesFatura = mesCompra - 1;
+        let anoFatura = anoCompra;
+
+        if (diaCompra >= fatura.dataFechamento) {
+          mesFatura++;
+          if (mesFatura > 11) { mesFatura = 0; anoFatura++; }
+        }
+
+        const valorParcela = item.valorTotal / item.vezes;
+        for (let i = 0; i < item.vezes; i++) {
+          let mesParcela = mesFatura + i;
+          let anoParcela = anoFatura + Math.floor(mesParcela / 12);
+          mesParcela = mesParcela % 12;
+
+          if (anoParcela === anoSelecionado && mesParcela === mesSelecionado) {
+            const resp = item.responsavel || 'Não Informado';
+            inicializarDivisao(resp);
+            divisao[resp].total += valorParcela;
+          }
+        }
+      });
+      
+      // Somar assinaturas vinculadas a esta fatura
+      const assinaturasVinculadas = assinaturas.filter(a => a.fatura === fatura.nome);
+      assinaturasVinculadas.forEach(ass => {
+        const resp = ass.responsavel || 'Não Informado';
+        inicializarDivisao(resp);
+        divisao[resp].total += ass.valor;
+      });
+    });
+
+    // 2. Somar pagamentos efetuados globalmente neste mês
+    pagamentos.forEach(pag => {
+      if (pag.mes === mesSelecionado && pag.ano === anoSelecionado) {
+        inicializarDivisao(pag.responsavel);
+        divisao[pag.responsavel].pago += pag.valor;
+      }
+    });
+
+    return Object.keys(divisao).map(resp => ({
+      nome: resp, total: divisao[resp].total, pago: divisao[resp].pago, restante: divisao[resp].total - divisao[resp].pago
+    }));
+  };
+
+  const acertoGlobal = calcularAcertoGlobal();
+
+  const handleSavePagamento = () => {
+    setPagamentos([...pagamentos, {
+      id: Date.now(),
+      mes: mesSelecionado,
+      ano: anoSelecionado,
+      responsavel: pagamentoData.responsavel,
+      valor: parseFloat(pagamentoData.valor)
+    }]);
+    setOpenPagamentoModal(false);
+  };
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, bgcolor: '#e3f2fd', borderRadius: 2 }}>
+        <IconButton onClick={() => mudarMes(-1)} color="primary"><ChevronLeftIcon /></IconButton>
+        <Typography variant="h6" fontWeight="bold" color="primary">Faturas de {mesesStr[mesSelecionado]} de {anoSelecionado}</Typography>
+        <IconButton onClick={() => mudarMes(1)} color="primary"><ChevronRightIcon /></IconButton>
+      </Box>
+
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <Button variant="contained" color="success" startIcon={<AddIcon />} onClick={() => handleOpenFatura()}>Adicionar Cartão</Button>
+      </Box>
+
+      <TableContainer component={Paper} variant="outlined" sx={{ mb: 4 }}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+              <TableCell />
+              <TableCell><strong>Cartão</strong></TableCell>
+              <TableCell align="right"><strong>Limite Total</strong></TableCell>
+              <TableCell align="right"><strong>Disponível Atual</strong></TableCell>
+              <TableCell align="right"><strong>Total da Fatura</strong></TableCell>
+              <TableCell align="center"><strong>Ações</strong></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {faturas.map((fatura) => (
+              <LinhaFatura 
+                key={fatura.id} fatura={fatura} mesSelecionado={mesSelecionado} anoSelecionado={anoSelecionado}
+                onEditFatura={handleOpenFatura} onDeleteFatura={handleDeleteFatura}
+                onAddItem={handleOpenItem} onEditItem={handleOpenItem} onDeleteItem={handleDeleteItem}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* NOVO: Painel de Acerto de Contas Global */}
+      <Paper elevation={2} sx={{ p: 3, bgcolor: '#fff', borderLeft: '5px solid #1976d2' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" fontWeight="bold">Acerto de Contas Global (Todos os Cartões)</Typography>
+          <Button variant="outlined" color="primary" startIcon={<PaymentsIcon />} onClick={() => { setPagamentoData({ responsavel: '', valor: '' }); setOpenPagamentoModal(true); }}>
+            Informar Pagamento Geral
+          </Button>
+        </Box>
+        <Divider sx={{ mb: 2 }} />
+        <Grid container spacing={2}>
+          {acertoGlobal.length > 0 ? acertoGlobal.map((resp) => (
+            <Grid item xs={12} sm={6} md={4} key={resp.nome}>
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: resp.restante <= 0 ? '#f1f8e9' : '#fafafa' }}>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>{resp.nome}</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Total a Pagar:</Typography>
+                  <Typography variant="body2" fontWeight="bold">{formatarMoeda(resp.total)}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Já Pagou:</Typography>
+                  <Typography variant="body2" color="success.main" fontWeight="bold">{formatarMoeda(resp.pago)}</Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1" fontWeight="bold">Restante:</Typography>
+                  <Typography variant="body1" fontWeight="bold" color={resp.restante <= 0 ? 'success.main' : 'error.main'}>
+                    {formatarMoeda(resp.restante)}
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          )) : (
+            <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>Nenhum lançamento registado para este mês.</Typography>
+          )}
+        </Grid>
+      </Paper>
+
+      {/* Modal Fatura */}
+      <Dialog open={openFaturaModal} onClose={() => setOpenFaturaModal(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{isEditingFatura ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle>
+        <DialogContent>
+          <TextField margin="dense" label="Nome do Cartão" value={faturaData.nome} onChange={(e) => setFaturaData({...faturaData, nome: e.target.value})} fullWidth variant="outlined" />
+          <TextField margin="dense" label="Limite Total do Cartão" type="number" value={faturaData.limite} onChange={(e) => setFaturaData({...faturaData, limite: e.target.value})} fullWidth variant="outlined" />
+          <Grid container spacing={2}>
+            <Grid item xs={6}><TextField margin="dense" label="Dia de Fecho" type="number" value={faturaData.dataFechamento} onChange={(e) => setFaturaData({...faturaData, dataFechamento: e.target.value})} fullWidth variant="outlined" /></Grid>
+            <Grid item xs={6}><TextField margin="dense" label="Dia de Vencimento" type="number" value={faturaData.dataVencimento} onChange={(e) => setFaturaData({...faturaData, dataVencimento: e.target.value})} fullWidth variant="outlined" /></Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenFaturaModal(false)}>Cancelar</Button><Button onClick={handleSaveFatura} variant="contained" color="success">Guardar</Button></DialogActions>
+      </Dialog>
+
+      {/* Modal Item */}
+      <Dialog open={openItemModal} onClose={() => setOpenItemModal(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{isEditingItem ? 'Editar Compra' : 'Nova Compra'}</DialogTitle>
+        <DialogContent>
+          <TextField margin="dense" label="Data (YYYY-MM-DD)" type="date" value={itemData.data} onChange={(e) => setItemData({...itemData, data: e.target.value})} fullWidth variant="outlined" InputLabelProps={{ shrink: true }} />
+          <TextField margin="dense" label="Nome da Compra" value={itemData.nome} onChange={(e) => setItemData({...itemData, nome: e.target.value})} fullWidth variant="outlined" />
+          <TextField margin="dense" label="Responsável (Ex: João, Maria)" value={itemData.responsavel} onChange={(e) => setItemData({...itemData, responsavel: e.target.value})} fullWidth variant="outlined" />
+          <TextField margin="dense" label="Tipo (ex: Alimentação)" value={itemData.tipo} onChange={(e) => setItemData({...itemData, tipo: e.target.value})} fullWidth variant="outlined" />
+          <Grid container spacing={2}>
+            <Grid item xs={6}><TextField margin="dense" label="Parcelas" type="number" value={itemData.vezes} onChange={(e) => setItemData({...itemData, vezes: e.target.value})} fullWidth variant="outlined" /></Grid>
+            <Grid item xs={6}><TextField margin="dense" label="Valor Total" type="number" value={itemData.valorTotal} onChange={(e) => setItemData({...itemData, valorTotal: e.target.value})} fullWidth variant="outlined" /></Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenItemModal(false)}>Cancelar</Button><Button onClick={handleSaveItem} variant="contained" color="primary">Guardar</Button></DialogActions>
+      </Dialog>
+
+      {/* Modal de Pagamento Global */}
+      <Dialog open={openPagamentoModal} onClose={() => setOpenPagamentoModal(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Informar Pagamento Geral</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>Registe o valor total transferido para pagar as despesas de {mesesStr[mesSelecionado]}.</Typography>
+          <TextField margin="dense" label="Quem pagou? (Ex: João)" value={pagamentoData.responsavel} onChange={(e) => setPagamentoData({...pagamentoData, responsavel: e.target.value})} fullWidth variant="outlined" />
+          <TextField margin="dense" label="Valor Pago" type="number" value={pagamentoData.valor} onChange={(e) => setPagamentoData({...pagamentoData, valor: e.target.value})} fullWidth variant="outlined" />
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenPagamentoModal(false)}>Cancelar</Button><Button onClick={handleSavePagamento} variant="contained" color="success">Registar</Button></DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
