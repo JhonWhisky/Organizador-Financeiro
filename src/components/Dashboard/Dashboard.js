@@ -1,7 +1,7 @@
 import React, { useContext } from "react";
 import { FinanceContext } from "../../context/FinanceContext";
 import {
-  Box, Grid, Paper, Typography, Divider, List, ListItem, ListItemText, useTheme
+  Box, Grid, Paper, Typography, Divider, useTheme
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -13,7 +13,6 @@ import {
 } from 'recharts';
 
 export default function Dashboard() {
-  // NOVO: Puxamos os "pagamentos" do contexto para os somar às receitas
   const { salarios, assinaturas, faturas, pagamentos } = useContext(FinanceContext);
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
