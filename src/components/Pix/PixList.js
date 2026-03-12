@@ -110,7 +110,7 @@ export default function PixList() {
       </Box>
 
       <TableContainer component={Paper} variant="outlined">
-        <Table>
+        <Table sx={{ whiteSpace: 'nowrap' }}>
           <TableHead sx={{ bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
             <TableRow>
               <TableCell><strong>Data</strong></TableCell>

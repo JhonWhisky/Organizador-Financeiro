@@ -159,7 +159,7 @@ export default function SalariosList() {
       </Box>
 
       <TableContainer component={Paper} variant="outlined">
-        <Table>
+        <Table sx={{ whiteSpace: 'nowrap' }}>
           <TableHead sx={{ bgcolor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
             <TableRow>
               <TableCell><strong>Nome da Renda</strong></TableCell>

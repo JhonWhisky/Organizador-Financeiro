@@ -208,7 +208,7 @@ export default function FaturasList() {
       </Box>
 
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 4 }}>
-        <Table>
+        <Table sx={{ whiteSpace: 'nowrap' }}>
           <TableHead>
             <TableRow sx={{ bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
               <TableCell />
