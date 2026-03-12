@@ -295,5 +295,44 @@ app.get('/pagamentos', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Erro ao buscar pagamentos.' }); }
 });
 
+// ==========================================
+// ROTAS DE PIX
+// ==========================================
+app.post('/pix', async (req, res) => {
+  try {
+    const { data, destinatario, valor, descricao, responsavelId } = req.body;
+    const novoPix = await prisma.pix.create({
+      data: { data, destinatario, valor: parseFloat(valor), descricao, responsavelId: parseInt(responsavelId) }
+    });
+    res.status(201).json(novoPix);
+  } catch (error) { res.status(400).json({ error: 'Erro ao registar PIX.' }); }
+});
+
+app.get('/pix', async (req, res) => {
+  try {
+    const listaPix = await prisma.pix.findMany({ include: { responsavel: true } });
+    res.json(listaPix);
+  } catch (error) { res.status(500).json({ error: 'Erro ao buscar PIX.' }); }
+});
+
+app.put('/pix/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, destinatario, valor, descricao, responsavelId } = req.body;
+    const pixAtualizado = await prisma.pix.update({
+      where: { id: parseInt(id) },
+      data: { data, destinatario, valor: parseFloat(valor), descricao, responsavelId: parseInt(responsavelId) }
+    });
+    res.json(pixAtualizado);
+  } catch (error) { res.status(400).json({ error: 'Erro ao atualizar PIX.' }); }
+});
+
+app.delete('/pix/:id', async (req, res) => {
+  try {
+    await prisma.pix.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ message: 'PIX eliminado!' });
+  } catch (error) { res.status(500).json({ error: 'Erro ao eliminar PIX.' }); }
+});
+
 // O Vercel precisa que exportemos a app em vez de apenas fazer o app.listen
 module.exports = app;

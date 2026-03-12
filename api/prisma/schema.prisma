@@ -14,6 +14,7 @@ model Responsavel {
   compras     ItemFatura[]
   assinaturas Assinatura[]
   pagamentos  Pagamento[]
+  pix         Pix[]
 }
 
 model Salario {
@@ -67,6 +68,17 @@ model Pagamento {
   mes           Int
   ano           Int
   valor         Float
+  
+  responsavelId Int
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+}
+
+model Pix {
+  id            Int         @id @default(autoincrement())
+  data          String      // Formato YYYY-MM-DD
+  destinatario  String
+  valor         Float
+  descricao     String
   
   responsavelId Int
   responsavel   Responsavel @relation(fields: [responsavelId], references: [id])

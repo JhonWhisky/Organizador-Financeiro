@@ -1,4 +1,5 @@
 import React, { useState, useContext } from 'react';
+// import { useTheme } from 'style-components';
 import { FinanceContext } from '../../context/FinanceContext';
 import api from '../../services/api';
 import {
@@ -13,6 +14,7 @@ import AddIcon from '@mui/icons-material/Add';
 const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 
 export default function AssinaturasList() {
+  const theme = 'dark';
   const { assinaturas, setAssinaturas, responsaveis, faturas } = useContext(FinanceContext);
 
   const [open, setOpen] = useState(false);
@@ -82,7 +84,7 @@ export default function AssinaturasList() {
 
       <TableContainer component={Paper} variant="outlined">
         <Table>
-          <TableHead sx={{ bgcolor: '#f0f0f0' }}>
+          <TableHead sx={{ bgcolor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
             <TableRow>
               <TableCell><strong>Nome</strong></TableCell>
               <TableCell><strong>Cartão</strong></TableCell>

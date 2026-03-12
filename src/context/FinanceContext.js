@@ -1,5 +1,5 @@
-import React, { createContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import React, { createContext, useState, useEffect } from "react";
+import api from "../services/api";
 
 export const FinanceContext = createContext();
 
@@ -10,6 +10,7 @@ export function FinanceProvider({ children }) {
   const [assinaturas, setAssinaturas] = useState([]);
   const [faturas, setFaturas] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
+  const [pix, setPix] = useState([]);
 
   useEffect(() => {
     carregarDadosIniciais();
@@ -17,44 +18,79 @@ export function FinanceProvider({ children }) {
 
   const carregarDadosIniciais = async () => {
     try {
-      const [resResp, resSal, resFat, resAss, resPag] = await Promise.all([
-        api.get('/responsaveis'),
-        api.get('/salarios'),
-        api.get('/faturas'),
-        api.get('/assinaturas'),
-        api.get('/pagamentos')
+      const [resResp, resSal, resFat, resAss, resPag, resPix] = await Promise.all([
+        api.get("/responsaveis"),
+        api.get("/salarios"),
+        api.get("/faturas"),
+        api.get("/assinaturas"),
+        api.get("/pagamentos"),
+        api.get("/pix"),
       ]);
-      
+
       setResponsaveis(resResp.data);
-      
-      setSalarios(resSal.data.map(sal => ({ ...sal, responsavel: sal.responsavel.nome })));
-      
-      setFaturas(resFat.data.map(fat => ({
-        ...fat,
-        itens: fat.itens.map(item => ({ ...item, responsavel: item.responsavel ? item.responsavel.nome : 'Não Informado' }))
-      })));
 
-      setAssinaturas(resAss.data.map(ass => ({
-        ...ass, 
-        responsavel: ass.responsavel ? ass.responsavel.nome : 'Não Informado',
-        fatura: ass.fatura ? ass.fatura.nome : 'Não Informada'
-      })));
+      setSalarios(
+        resSal.data.map((sal) => ({
+          ...sal,
+          responsavel: sal.responsavel.nome,
+        })),
+      );
 
-      setPagamentos(resPag.data.map(pag => ({
-        ...pag, responsavel: pag.responsavel ? pag.responsavel.nome : 'Não Informado'
-      })));
+      setFaturas(
+        resFat.data.map((fat) => ({
+          ...fat,
+          itens: fat.itens.map((item) => ({
+            ...item,
+            responsavel: item.responsavel
+              ? item.responsavel.nome
+              : "Não Informado",
+          })),
+        })),
+      );
 
+      setAssinaturas(
+        resAss.data.map((ass) => ({
+          ...ass,
+          responsavel: ass.responsavel ? ass.responsavel.nome : "Não Informado",
+          fatura: ass.fatura ? ass.fatura.nome : "Não Informada",
+        })),
+      );
+
+      setPagamentos(
+        resPag.data.map((pag) => ({
+          ...pag,
+          responsavel: pag.responsavel ? pag.responsavel.nome : "Não Informado",
+        })),
+      );
+
+      setPix(
+        resPix.data.map((p) => ({
+          ...p,
+          responsavel: p.responsavel ? p.responsavel.nome : "Não Informado",
+        })),
+      );
     } catch (error) {
       console.error("Erro ao carregar dados da API:", error);
     }
   };
 
   return (
-    <FinanceContext.Provider value={{
-      responsaveis, setResponsaveis, salarios, setSalarios,
-      assinaturas, setAssinaturas, faturas, setFaturas,
-      pagamentos, setPagamentos
-    }}>
+    <FinanceContext.Provider
+      value={{
+        responsaveis,
+        setResponsaveis,
+        salarios,
+        setSalarios,
+        assinaturas,
+        setAssinaturas,
+        faturas,
+        setFaturas,
+        pagamentos,
+        setPagamentos,
+        pix,
+        setPix,
+      }}
+    >
       {children}
     </FinanceContext.Provider>
   );

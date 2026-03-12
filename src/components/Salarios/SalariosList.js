@@ -16,6 +16,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 
 export default function SalariosList() {
+  const theme = 'dark';
   const { salarios, setSalarios, faturas, assinaturas, responsaveis, setResponsaveis } = useContext(FinanceContext);
 
   // Estados do Histórico de Meses
@@ -143,7 +144,7 @@ export default function SalariosList() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, p: 2, bgcolor: theme === 'dark' ? 'rgba(76, 175, 80, 0.1)' : '#d1fae5', borderRadius: 2 }}>
         <IconButton onClick={() => mudarMes(-1)} color="success"><ChevronLeftIcon /></IconButton>
         <Typography variant="h6" fontWeight="bold" color="success.main">
           Balanço de Salários - {mesesStr[mesSelecionado]} de {anoSelecionado}
@@ -159,7 +160,7 @@ export default function SalariosList() {
 
       <TableContainer component={Paper} variant="outlined">
         <Table>
-          <TableHead sx={{ bgcolor: '#f0f0f0' }}>
+          <TableHead sx={{ bgcolor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
             <TableRow>
               <TableCell><strong>Nome da Renda</strong></TableCell>
               <TableCell><strong>Responsável</strong></TableCell>
