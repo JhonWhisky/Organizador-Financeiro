@@ -7,30 +7,60 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Usuario {
+  id          Int           @id @default(autoincrement())
+  email       String        @unique
+  senha       String
+  
+  // Relações (Tudo o que pertence a este utilizador)
+  responsaveis Responsavel[]
+  salarios    Salario[]
+  faturas     Fatura[]
+  itens       ItemFatura[]
+  assinaturas Assinatura[]
+  pagamentos  Pagamento[]
+  pix         Pix[]
+}
+
 model Responsavel {
   id          Int          @id @default(autoincrement())
-  nome        String       @unique
+  nome        String
+  
+  usuarioId   Int
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
   salarios    Salario[]
   compras     ItemFatura[]
   assinaturas Assinatura[]
   pagamentos  Pagamento[]
   pix         Pix[]
+
+  // O nome da pessoa só é único DENTRO da conta do próprio utilizador
+  @@unique([nome, usuarioId])
 }
 
 model Salario {
   id            Int         @id @default(autoincrement())
   nome          String
   valor         Float
+  
   responsavelId Int
-  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
+
+  usuarioId     Int
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model Fatura {
   id             Int          @id @default(autoincrement())
-  nome           String       @unique
+  nome           String
   limite         Float
   dataFechamento Int
   dataVencimento Int
+  
+  usuarioId      Int
+  usuario        Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
   itens          ItemFatura[]
   assinaturas    Assinatura[]
 }
@@ -47,7 +77,10 @@ model ItemFatura {
   fatura        Fatura      @relation(fields: [faturaId], references: [id], onDelete: Cascade)
   
   responsavelId Int
-  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
+
+  usuarioId     Int
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model Assinatura {
@@ -60,7 +93,10 @@ model Assinatura {
   fatura        Fatura      @relation(fields: [faturaId], references: [id], onDelete: Cascade)
   
   responsavelId Int
-  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
+
+  usuarioId     Int
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model Pagamento {
@@ -70,16 +106,22 @@ model Pagamento {
   valor         Float
   
   responsavelId Int
-  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
+
+  usuarioId     Int
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model Pix {
   id            Int         @id @default(autoincrement())
-  data          String      // Formato YYYY-MM-DD
+  data          String      
   destinatario  String
   valor         Float
   descricao     String
   
   responsavelId Int
-  responsavel   Responsavel @relation(fields: [responsavelId], references: [id])
+  responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
+
+  usuarioId     Int
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
