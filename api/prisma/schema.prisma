@@ -11,6 +11,9 @@ model Usuario {
   id          Int           @id @default(autoincrement())
   email       String        @unique
   senha       String
+
+  codigoRecuperacao String?
+  expiracaoCodigo   DateTime?
   
   // Relações (Tudo o que pertence a este utilizador)
   responsaveis Responsavel[]
