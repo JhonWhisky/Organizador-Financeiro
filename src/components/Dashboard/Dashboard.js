@@ -1,7 +1,8 @@
 import React, { useContext } from "react";
 import { FinanceContext } from "../../context/FinanceContext";
 import {
-  Box, Grid, Paper, Typography, Divider, useTheme
+  Box, Grid, Paper, Typography, Divider, useTheme,
+  Table, TableBody, TableCell, TableHead, TableRow
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
@@ -13,7 +14,7 @@ import {
 } from 'recharts';
 
 export default function Dashboard() {
-  const { salarios, assinaturas, faturas, pagamentos } = useContext(FinanceContext);
+  const { salarios, assinaturas, faturas, pagamentos, pix } = useContext(FinanceContext);
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
@@ -35,24 +36,43 @@ export default function Dashboard() {
   let totalAssinaturas = 0;
   let totalParcelasFaturas = 0;
   const despesasPorPessoa = {};
-  
+  const despesasPorCategoria = {};
+
   // Array para guardar as despesas totais de cada um dos 12 meses do ano (Para o Gráfico de Linha)
   const historicoMeses = Array.from({ length: 12 }, () => 0);
 
+  // Janela de projeção: 6 meses a contar do mês atual (inclusive)
+  const janelaProjecao = [];
+  for (let k = 0; k < 6; k++) {
+    let m = mesAtual + k;
+    const a = anoAtual + Math.floor(m / 12);
+    m = m % 12;
+    janelaProjecao.push({ mes: m, ano: a, chave: `${a}-${m}`, label: `${mesesStr[m]}/${String(a).slice(2)}` });
+  }
+  const chavesProjecao = new Set(janelaProjecao.map(w => w.chave));
+  const projecaoPorCartao = {}; // nomeCartao -> { chaveMes -> total }
+
   const inicializarPessoa = (nome) => { if (!despesasPorPessoa[nome]) despesasPorPessoa[nome] = 0; };
+  const somarCategoria = (cat, valor) => { despesasPorCategoria[cat] = (despesasPorCategoria[cat] || 0) + valor; };
+  const somarProjecao = (cartao, chave, valor) => {
+    if (!projecaoPorCartao[cartao]) projecaoPorCartao[cartao] = {};
+    projecaoPorCartao[cartao][chave] = (projecaoPorCartao[cartao][chave] || 0) + valor;
+  };
 
   faturas.forEach(fatura => {
+    if (!projecaoPorCartao[fatura.nome]) projecaoPorCartao[fatura.nome] = {};
+
     // Processar Compras Parceladas
     fatura.itens.forEach(item => {
       const [anoCompra, mesCompra, diaCompra] = item.data.split('-').map(Number);
       let mesFatura = mesCompra - 1; let anoFatura = anoCompra;
       if (diaCompra >= fatura.dataFechamento) { mesFatura++; if (mesFatura > 11) { mesFatura = 0; anoFatura++; } }
-      
+
       const valorParcela = item.valorTotal / item.vezes;
-      
+
       for (let i = 0; i < item.vezes; i++) {
         let mesParcela = mesFatura + i; let anoParcela = anoFatura + Math.floor(mesParcela / 12); mesParcela = mesParcela % 12;
-        
+
         // Acumular no gráfico de linha se for do ano atual
         if (anoParcela === anoAtual) {
           historicoMeses[mesParcela] += valorParcela;
@@ -64,7 +84,12 @@ export default function Dashboard() {
           const resp = item.responsavel || 'Não Informado';
           inicializarPessoa(resp);
           despesasPorPessoa[resp] += valorParcela;
+          somarCategoria(item.tipo || 'Outros', valorParcela);
         }
+
+        // Acumular na projeção das próximas faturas
+        const chave = `${anoParcela}-${mesParcela}`;
+        if (chavesProjecao.has(chave)) somarProjecao(fatura.nome, chave, valorParcela);
       }
     });
 
@@ -79,10 +104,29 @@ export default function Dashboard() {
       const resp = ass.responsavel || 'Não Informado';
       inicializarPessoa(resp);
       despesasPorPessoa[resp] += ass.valor;
+      somarCategoria('Assinaturas', ass.valor);
+
+      // Assinaturas cobram em todos os meses da projeção
+      janelaProjecao.forEach(w => somarProjecao(fatura.nome, w.chave, ass.valor));
     });
   });
 
-  const totalDespesas = totalAssinaturas + totalParcelasFaturas;
+  // Processar PIX do mês atual (transferências saem do saldo)
+  let totalPix = 0;
+  pix.forEach(p => {
+    if (!p.data) return;
+    const [ano, mes] = p.data.split('-').map(Number);
+    if (ano === anoAtual && (mes - 1) === mesAtual) {
+      totalPix += p.valor;
+      const resp = p.responsavel || 'Não Informado';
+      inicializarPessoa(resp);
+      despesasPorPessoa[resp] += p.valor;
+      somarCategoria('PIX', p.valor);
+      historicoMeses[mesAtual] += p.valor;
+    }
+  });
+
+  const totalDespesas = totalAssinaturas + totalParcelasFaturas + totalPix;
   const saldoFinal = totalReceitas - totalDespesas;
 
   // --- 2. Dados Formatados para o Recharts ---
@@ -94,12 +138,24 @@ export default function Dashboard() {
     name: nome, value: despesasPorPessoa[nome]
   }));
 
+  const dataCategoria = Object.keys(despesasPorCategoria)
+    .map(nome => ({ name: nome, value: despesasPorCategoria[nome] }))
+    .sort((a, b) => b.value - a.value);
+
   const dataLinha = mesesStr.map((mes, index) => ({
     name: mes,
     Despesas: historicoMeses[index]
   }));
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#f50057'];
+  // Projeção: linhas = cartões, colunas = próximos 6 meses
+  const cartoesProjecao = Object.keys(projecaoPorCartao).filter(nome =>
+    janelaProjecao.some(w => (projecaoPorCartao[nome][w.chave] || 0) > 0)
+  );
+  const totaisProjecaoPorMes = janelaProjecao.map(w =>
+    cartoesProjecao.reduce((acc, nome) => acc + (projecaoPorCartao[nome][w.chave] || 0), 0)
+  );
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#f50057', '#00bcd4', '#ff9800'];
   const formatarMoeda = (valor) => Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
@@ -143,10 +199,10 @@ export default function Dashboard() {
 
       {/* --- GRÁFICOS --- */}
       <Grid container spacing={3} sx={{ mt: 1 }}>
-        
+
         {/* Gráfico 1: Barras (Receitas vs Despesas) */}
         <Grid item xs={12} md={6}>
-          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', height: '100%', width: '52rem' }}>
+          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', height: '100%' }}>
             <Typography variant="h6" gutterBottom fontWeight="bold">Balanço do Mês</Typography>
             <Divider sx={{ mb: 2 }} />
             <ResponsiveContainer width="100%" height={280}>
@@ -165,7 +221,7 @@ export default function Dashboard() {
 
         {/* Gráfico 2: Donut (Divisão por Pessoa) */}
         <Grid item xs={12} md={6}>
-          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', height: '100%', width: '52rem' }}>
+          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', height: '100%' }}>
             <Typography variant="h6" gutterBottom fontWeight="bold">Quem gasta mais? (Despesas)</Typography>
             <Divider sx={{ mb: 2 }} />
             {dataDonut.length > 0 ? (
@@ -188,9 +244,36 @@ export default function Dashboard() {
           </Paper>
         </Grid>
 
-        {/* Gráfico 3: NOVO - Linha Temporal (Evolução Anual) */}
-        <Grid item xs={12} md={12}>
-          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', width: '52rem' }}>
+        {/* Gráfico 3: Barras (Gastos por Categoria) */}
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', height: '100%' }}>
+            <Typography variant="h6" gutterBottom fontWeight="bold">Gastos por Categoria (Mês)</Typography>
+            <Divider sx={{ mb: 2 }} />
+            {dataCategoria.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={dataCategoria} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#444' : '#e0e0e0'} horizontal={false} />
+                  <XAxis type="number" stroke={isDark ? '#ccc' : '#555'} tickFormatter={(value) => `R$ ${value}`} />
+                  <YAxis type="category" dataKey="name" stroke={isDark ? '#ccc' : '#555'} width={90} />
+                  <RechartsTooltip formatter={(value) => formatarMoeda(value)} contentStyle={{ backgroundColor: isDark ? '#333' : '#fff', borderColor: isDark ? '#555' : '#ccc', color: isDark ? '#fff' : '#000' }} />
+                  <Bar dataKey="value" name="Gasto" radius={[0, 4, 4, 0]} barSize={22}>
+                    {dataCategoria.map((entry, index) => (
+                      <Cell key={`cat-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography color="text.secondary">Nenhuma despesa categorizada neste mês.</Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Gráfico 4: Linha Temporal (Evolução Anual) */}
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff', height: '100%' }}>
             <Typography variant="h6" gutterBottom fontWeight="bold">Evolução de Despesas em {anoAtual}</Typography>
             <Divider sx={{ mb: 2 }} />
             <ResponsiveContainer width="100%" height={300}>
@@ -205,7 +288,49 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </Paper>
         </Grid>
-        
+
+        {/* Projeção: Próximas Faturas (6 meses) */}
+        <Grid item xs={12} md={12}>
+          <Paper elevation={3} sx={{ p: 3, bgcolor: isDark ? 'background.paper' : '#fff' }}>
+            <Typography variant="h6" gutterBottom fontWeight="bold">Projeção das Próximas Faturas (6 meses)</Typography>
+            <Typography variant="caption" color="text.secondary">Parcelas e assinaturas já comprometidas em cada cartão.</Typography>
+            <Divider sx={{ my: 2 }} />
+            {cartoesProjecao.length > 0 ? (
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ whiteSpace: 'nowrap' }}>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
+                      <TableCell><strong>Cartão</strong></TableCell>
+                      {janelaProjecao.map(w => (
+                        <TableCell key={w.chave} align="right"><strong>{w.label}</strong></TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {cartoesProjecao.map((nome, idx) => (
+                      <TableRow key={nome}>
+                        <TableCell sx={{ borderLeft: `4px solid ${COLORS[idx % COLORS.length]}` }}>{nome}</TableCell>
+                        {janelaProjecao.map(w => {
+                          const v = projecaoPorCartao[nome][w.chave] || 0;
+                          return <TableCell key={w.chave} align="right">{v > 0 ? formatarMoeda(v) : '—'}</TableCell>;
+                        })}
+                      </TableRow>
+                    ))}
+                    <TableRow sx={{ bgcolor: isDark ? 'rgba(33, 150, 243, 0.1)' : '#e3f2fd' }}>
+                      <TableCell><strong>Total</strong></TableCell>
+                      {totaisProjecaoPorMes.map((t, i) => (
+                        <TableCell key={i} align="right"><strong>{formatarMoeda(t)}</strong></TableCell>
+                      ))}
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Box>
+            ) : (
+              <Typography color="text.secondary">Nenhuma fatura ou assinatura prevista para os próximos meses.</Typography>
+            )}
+          </Paper>
+        </Grid>
+
       </Grid>
     </Box>
   );
