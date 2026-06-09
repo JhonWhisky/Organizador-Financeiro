@@ -13,7 +13,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
-const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+const formatarMoeda = (valor) => Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function SalariosList() {
   const theme = 'dark';
