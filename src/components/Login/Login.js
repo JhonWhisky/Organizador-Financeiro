@@ -28,12 +28,12 @@ export default function Login() {
         await registrar(email, senha);
       } 
       else if (fase === 'FORGOT') {
-        // Pede o código de recuperação
+        // Pede o código de recuperação. O código é enviado por e-mail (ou registado
+        // no log do servidor em dev) — nunca volta na resposta, por segurança.
         const res = await api.post('/auth/esqueci-senha', { email });
-        // Para testes: Mostramos o código no ecrã de sucesso. (Numa app real, dizias só "Verifica o teu e-mail")
-        setSucesso(`Simulação: O teu código é ${res.data.codigoParaTeste}`);
+        setSucesso(res.data.message);
         setFase('RESET');
-      } 
+      }
       else if (fase === 'RESET') {
         // Envia o código e a nova senha
         const res = await api.post('/auth/redefinir-senha', { email, codigo, novaSenha: senha });
