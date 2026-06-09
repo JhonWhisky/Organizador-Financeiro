@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { Container, Typography, Box, Paper, ThemeProvider, createTheme, CssBaseline, IconButton } from '@mui/material';
+import { Container, Typography, Box, Paper, ThemeProvider, createTheme, CssBaseline, IconButton, CircularProgress, Alert, Button } from '@mui/material';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -8,9 +8,36 @@ import SalariosList from './components/Salarios/SalariosList';
 import AssinaturasList from './components/Assinaturas/AssinaturasList';
 import FaturasList from './components/Faturas/FaturasList';
 import PixList from './components/Pix/PixList';
-import { FinanceProvider } from './context/FinanceContext';
+import { FinanceProvider, FinanceContext } from './context/FinanceContext';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import Login from './components/Login/Login';
+
+// Mostra spinner enquanto carrega e um alerta com opção de retry em caso de erro.
+function PainelFinanceiro() {
+  const { carregando, erro, recarregar } = useContext(FinanceContext);
+
+  if (carregando) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', my: 8 }}><CircularProgress /></Box>;
+  }
+
+  if (erro) {
+    return (
+      <Alert severity="error" sx={{ my: 4 }} action={<Button color="inherit" size="small" onClick={recarregar}>Tentar de novo</Button>}>
+        {erro}
+      </Alert>
+    );
+  }
+
+  return (
+    <>
+      <Box sx={{ mb: 5 }}><Dashboard /></Box>
+      <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de Salários</Typography><SalariosList /></Paper>
+      <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de PIX (Transferências)</Typography><PixList /></Paper>
+      <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de Assinaturas</Typography><AssinaturasList /></Paper>
+      <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de Faturas</Typography><FaturasList /></Paper>
+    </>
+  );
+}
 
 // Este componente protege a visualização. Só mostra o painel se houver utilizador logado.
 function MainContent({ toggleColorMode, mode }) {
@@ -53,11 +80,7 @@ function MainContent({ toggleColorMode, mode }) {
             </Box>
           </Box>
 
-          <Box sx={{ mb: 5 }}><Dashboard /></Box>
-          <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de Salários</Typography><SalariosList /></Paper>
-          <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de PIX (Transferências)</Typography><PixList /></Paper>
-          <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de Assinaturas</Typography><AssinaturasList /></Paper>
-          <Paper elevation={3} sx={{ p: 3, mb: 4 }}><Typography variant="h6" gutterBottom>Gerenciador de Faturas</Typography><FaturasList /></Paper>
+          <PainelFinanceiro />
         </Box>
       </Container>
     </FinanceProvider>
