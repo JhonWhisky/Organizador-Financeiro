@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = import.meta.env.PROD;
 
 const api = axios.create({
-  baseURL: isProduction ? '/api' : 'http://localhost:3001', 
+  baseURL: isProduction ? '/api' : 'http://localhost:3001',
 });
 
 // NOVO: Injeta o Token de Segurança em todos os pedidos que saem do React
