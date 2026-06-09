@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('mostra o ecrã de login quando não há sessão', async () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  // Sem token guardado, a app deve trancar o utilizador no ecrã de Login.
+  expect(await screen.findByText(/Bem-vindo de Volta/i)).toBeInTheDocument();
 });

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useCallback } from "react";
 import api from "../services/api";
 
 export const FinanceContext = createContext();
@@ -12,11 +12,13 @@ export function FinanceProvider({ children }) {
   const [pagamentos, setPagamentos] = useState([]);
   const [pix, setPix] = useState([]);
 
-  useEffect(() => {
-    carregarDadosIniciais();
-  }, []);
+  // Estados de UI para feedback ao utilizador
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState(null);
 
-  const carregarDadosIniciais = async () => {
+  const carregarDadosIniciais = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
     try {
       const [resResp, resSal, resFat, resAss, resPag, resPix] = await Promise.all([
         api.get("/responsaveis"),
@@ -71,8 +73,17 @@ export function FinanceProvider({ children }) {
       );
     } catch (error) {
       console.error("Erro ao carregar dados da API:", error);
+      setErro(
+        "Não foi possível carregar os teus dados. Verifica a tua ligação e tenta novamente.",
+      );
+    } finally {
+      setCarregando(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    carregarDadosIniciais();
+  }, [carregarDadosIniciais]);
 
   return (
     <FinanceContext.Provider
@@ -89,6 +100,9 @@ export function FinanceProvider({ children }) {
         setPagamentos,
         pix,
         setPix,
+        carregando,
+        erro,
+        recarregar: carregarDadosIniciais,
       }}
     >
       {children}
