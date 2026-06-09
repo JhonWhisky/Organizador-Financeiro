@@ -14,7 +14,7 @@ model Usuario {
 
   codigoRecuperacao String?
   expiracaoCodigo   DateTime?
-  
+
   // Relações (Tudo o que pertence a este utilizador)
   responsaveis Responsavel[]
   salarios    Salario[]
@@ -28,7 +28,7 @@ model Usuario {
 model Responsavel {
   id          Int          @id @default(autoincrement())
   nome        String
-  
+
   usuarioId   Int
   usuario     Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -40,91 +40,111 @@ model Responsavel {
 
   // O nome da pessoa só é único DENTRO da conta do próprio utilizador
   @@unique([nome, usuarioId])
+  @@index([usuarioId])
 }
 
 model Salario {
   id            Int         @id @default(autoincrement())
   nome          String
-  valor         Float
-  
+  valor         Decimal     @db.Decimal(12, 2)
+
   responsavelId Int
   responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
 
   usuarioId     Int
   usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([responsavelId])
 }
 
 model Fatura {
   id             Int          @id @default(autoincrement())
   nome           String
-  limite         Float
+  limite         Decimal      @db.Decimal(12, 2)
   dataFechamento Int
   dataVencimento Int
-  
+
   usuarioId      Int
   usuario        Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   itens          ItemFatura[]
   assinaturas    Assinatura[]
+
+  @@index([usuarioId])
 }
 
 model ItemFatura {
   id            Int         @id @default(autoincrement())
-  data          String
+  data          DateTime    @db.Date
   nome          String
   tipo          String
   vezes         Int
-  valorTotal    Float
-  
+  valorTotal    Decimal     @db.Decimal(12, 2)
+
   faturaId      Int
   fatura        Fatura      @relation(fields: [faturaId], references: [id], onDelete: Cascade)
-  
+
   responsavelId Int
   responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
 
   usuarioId     Int
   usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([faturaId])
+  @@index([responsavelId])
 }
 
 model Assinatura {
   id            Int         @id @default(autoincrement())
   nome          String
-  valor         Float
+  valor         Decimal     @db.Decimal(12, 2)
   diaCobranca   Int
-  
+
   faturaId      Int
   fatura        Fatura      @relation(fields: [faturaId], references: [id], onDelete: Cascade)
-  
+
   responsavelId Int
   responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
 
   usuarioId     Int
   usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([faturaId])
+  @@index([responsavelId])
 }
 
 model Pagamento {
   id            Int         @id @default(autoincrement())
   mes           Int
   ano           Int
-  valor         Float
-  
+  valor         Decimal     @db.Decimal(12, 2)
+
   responsavelId Int
   responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
 
   usuarioId     Int
   usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([responsavelId])
 }
 
 model Pix {
   id            Int         @id @default(autoincrement())
-  data          String      
+  data          DateTime    @db.Date
   destinatario  String
-  valor         Float
+  valor         Decimal     @db.Decimal(12, 2)
   descricao     String
-  
+
   responsavelId Int
   responsavel   Responsavel @relation(fields: [responsavelId], references: [id], onDelete: Cascade)
 
   usuarioId     Int
   usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([responsavelId])
 }
