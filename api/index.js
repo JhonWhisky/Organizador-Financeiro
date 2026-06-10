@@ -111,8 +111,6 @@ app.post(
     const { email } = req.body;
     const usuario = await prisma.usuario.findUnique({ where: { email } });
 
-    // Só gera/envia código se o utilizador existir, mas a resposta é SEMPRE
-    // genérica e 200 para não permitir enumeração de emails.
     if (usuario) {
       const codigo = crypto.randomInt(100000, 1000000).toString();
       const codigoHash = await bcrypt.hash(codigo, 10);
@@ -123,7 +121,18 @@ app.post(
         data: { codigoRecuperacao: codigoHash, expiracaoCodigo: expiracao },
       });
 
-      await enviarCodigoRecuperacao(email, codigo);
+      // Tenta enviar por e-mail (best-effort); uma falha não derruba o pedido.
+      try {
+        await enviarCodigoRecuperacao(email, codigo);
+      } catch (e) {
+        console.error('Falha ao enviar e-mail de recuperação:', e.message);
+      }
+
+      // ⚠️ TEMPORÁRIO/INSEGURO: devolve o código na resposta enquanto o envio por
+      // e-mail não está ativo. Isto permite enumeração de e-mails e que qualquer um
+      // redefina a senha de uma conta existente. REMOVER assim que o SMTP estiver OK
+      // (basta voltar à resposta genérica abaixo e remover este bloco).
+      return res.json({ message: 'Código gerado.', codigoParaTeste: codigo });
     }
 
     res.json({ message: 'Se este e-mail existir, um código de recuperação foi enviado.' });
