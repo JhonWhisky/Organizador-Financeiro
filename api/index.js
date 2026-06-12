@@ -11,6 +11,7 @@ const jwt = require('jsonwebtoken');
 const { middlewareSerializacao } = require('./lib/serializar');
 const { validar, schemas } = require('./lib/validacao');
 const { enviarCodigoRecuperacao } = require('./lib/email');
+const { enviarMensagem } = require('./lib/gemini');
 
 // ==========================================
 // CONFIGURAÇÃO E FAIL-FAST
@@ -464,6 +465,33 @@ app.delete(
   asyncHandler(async (req, res) => {
     await prisma.pix.deleteMany({ where: { id: parseInt(req.params.id), usuarioId: req.usuarioId } });
     res.json({ success: true });
+  })
+);
+
+// --- CHAT IA ---
+app.post(
+  '/chat',
+  validar(schemas.chat),
+  asyncHandler(async (req, res) => {
+    const { mensagem, historico } = req.body;
+
+    const [salarios, assinaturas, faturas, pix, pagamentos] = await Promise.all([
+      prisma.salario.findMany({ where: { usuarioId: req.usuarioId }, include: { responsavel: true } }),
+      prisma.assinatura.findMany({ where: { usuarioId: req.usuarioId }, include: { responsavel: true, fatura: true } }),
+      prisma.fatura.findMany({ where: { usuarioId: req.usuarioId }, include: { itens: { include: { responsavel: true } } } }),
+      prisma.pix.findMany({ where: { usuarioId: req.usuarioId }, include: { responsavel: true }, orderBy: { data: 'desc' }, take: 50 }),
+      prisma.pagamento.findMany({ where: { usuarioId: req.usuarioId }, include: { responsavel: true } }),
+    ]);
+
+    try {
+      const resposta = await enviarMensagem(historico, mensagem, { salarios, assinaturas, faturas, pix, pagamentos });
+      res.json({ resposta });
+    } catch (e) {
+      if (e.status === 503) return res.status(503).json({ error: 'O serviço de IA está temporariamente sobrecarregado. Tenta novamente em alguns segundos.' });
+      if (e.status === 429) return res.status(429).json({ error: 'Limite da API Gemini atingido. Aguarda um momento e tenta novamente.' });
+      if (e.status === 400) return res.status(400).json({ error: 'Pedido inválido para a IA. Tenta reformular a pergunta.' });
+      throw e;
+    }
   })
 );
 

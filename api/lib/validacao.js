@@ -22,6 +22,7 @@ const validar = (schema) => (req, res, next) => {
 const email = z.string().trim().toLowerCase().email('Email inválido.');
 const senha = z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.');
 const dinheiro = z.coerce.number().finite().nonnegative('O valor não pode ser negativo.');
+const dinheiroItem = z.coerce.number().finite();
 const dia = z.coerce.number().int().min(1).max(31);
 const id = z.coerce.number().int().positive();
 const dataISO = z
@@ -60,7 +61,7 @@ const schemas = {
     nome: z.string().trim().min(1),
     tipo: z.string().trim().min(1),
     vezes: z.coerce.number().int().min(1, 'Mínimo de 1 parcela.'),
-    valorTotal: dinheiro,
+    valorTotal: dinheiroItem,
     faturaId: id,
     responsavelId: id,
   }),
@@ -71,7 +72,7 @@ const schemas = {
     nome: z.string().trim().min(1),
     tipo: z.string().trim().min(1),
     vezes: z.coerce.number().int().min(1),
-    valorTotal: dinheiro,
+    valorTotal: dinheiroItem,
     responsavelId: id,
   }),
 
@@ -103,6 +104,14 @@ const schemas = {
     valor: dinheiro,
     descricao: z.string().trim().optional().default(''),
     responsavelId: id,
+  }),
+
+  chat: z.object({
+    mensagem: z.string().trim().min(1).max(2000),
+    historico: z.array(z.object({
+      role: z.enum(['user', 'model']),
+      content: z.string().max(20000),
+    })).max(20).default([]),
   }),
 };
 

@@ -8,6 +8,7 @@ import SalariosList from './components/Salarios/SalariosList';
 import AssinaturasList from './components/Assinaturas/AssinaturasList';
 import FaturasList from './components/Faturas/FaturasList';
 import PixList from './components/Pix/PixList';
+import ChatIA from './components/Chat/ChatIA';
 import { FinanceProvider, FinanceContext } from './context/FinanceContext';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import Login from './components/Login/Login';
@@ -83,6 +84,7 @@ function MainContent({ toggleColorMode, mode }) {
           <PainelFinanceiro />
         </Box>
       </Container>
+      <ChatIA />
     </FinanceProvider>
   );
 }
