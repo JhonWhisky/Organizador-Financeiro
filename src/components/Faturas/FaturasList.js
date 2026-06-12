@@ -93,7 +93,7 @@ function LinhaFatura({ fatura, mesSelecionado, anoSelecionado, onEditFatura, onD
                       <TableCell><Box sx={{ display: 'flex', alignItems: 'center' }}>{item.isAssinatura && <AutorenewIcon fontSize="small" color="secondary" sx={{ mr: 1 }} />}<Typography variant="body2">{item.nome}</Typography></Box></TableCell>
                       <TableCell><Chip size="small" label={item.responsavel || 'Não Informado'} /></TableCell>
                       <TableCell align="center">{item.isAssinatura ? '-' : `${item.parcelaAtual}/${item.vezes}`}</TableCell>
-                      <TableCell align="right"><strong>{formatarMoeda(item.valorExibicao)}</strong></TableCell>
+                      <TableCell align="right"><strong style={{ color: item.valorExibicao < 0 ? '#4caf50' : 'inherit' }}>{formatarMoeda(item.valorExibicao)}</strong></TableCell>
                       <TableCell align="center">
                         {!item.isAssinatura ? (
                           <>

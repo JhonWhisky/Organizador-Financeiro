@@ -18,7 +18,9 @@ export default defineConfig({
   // Os componentes usam JSX dentro de ficheiros .js — diz ao esbuild para os tratar como JSX
   esbuild: { loader: 'jsx', include: /src\/.*\.jsx?$/, exclude: [] },
   optimizeDeps: { esbuildOptions: { loader: { '.js': 'jsx' } } },
-  server: { port: 3000 },
+  // O frontend roda em 5173; a porta 3001 fica reservada para o backend (api/index.js),
+  // que é para onde src/services/api.js envia as requisições em desenvolvimento.
+  server: { port: 5173 },
   build: {
     outDir: 'build',
     rollupOptions: {
